@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v15';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v16';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -306,7 +306,7 @@ function header(title,backAct,right){
   hline(0,SB+40,W,C.line)}
 // barra schede in basso (riepilogo)
 function tabBar(){const th=TB,y=H-th,tw=W/3,n=lt.laps.length;hline(0,y,W,C.line);
-  [['laps','laps','Giri',n?String(n):'',()=>{dev.screen='laps';dev.scroll=0}],
+  [['laps','laps','Giri',n?String(n):'',()=>{dev.screen='laps';dev.scroll=0;dev.scrollV=0}],
    ['tracks','pin','Piste',saved.tracks.length?String(saved.tracks.length):'',openTracks],
    ['set','gear','Opzioni','',()=>dev.screen='settings']].forEach(([id,ic,l,cnt,act],k)=>{const x=k*tw,down=pressed===id,cy=y+th/2+1;
     if(down){cx.fillStyle=C.btnDown;cx.fillRect(x,y+1,tw,th-1)}
@@ -394,23 +394,31 @@ function drawRace(){
   for(let i=0;i<2;i++){cx.beginPath();cx.arc(24+i*9,py+ph-14,2.5,0,7);cx.fillStyle=i===view?C.accentTxt:C.off;cx.fill()}
   hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}
 
+// ---------- liste trascinabili ----------
+let scrollZone=null,drag=null;
+function listArea(key,x,y,w,h,content){const max=Math.max(0,content-h);let v=dev[key]||0;
+  if(!drag&&dev[key+'V']){v+=dev[key+'V'];dev[key+'V']*=0.92;if(Math.abs(dev[key+'V'])<0.3||v<0||v>max)dev[key+'V']=0}
+  v=Math.max(0,Math.min(max,v));dev[key]=v;scrollZone={key,x,y,w,h,max};
+  cx.save();cx.beginPath();cx.rect(x,y,w,h);cx.clip();return v}
+function endList(key,x,y,w,h,content){cx.restore();const max=Math.max(0,content-h);if(!max)return;
+  const bh=Math.max(18,h*h/content),by=y+(h-bh)*(dev[key]/max);rr(x+w-4,by,3,bh,1.5,C.faint)}
+
 // ---------- giri ----------
 function drawLaps(){statusBar('','');const L=lt.laps,n=L.length;
-  header(n?(n===1?'1 giro':`${n} giri`):'Giri',()=>dev.screen='ready',n?`media ${fmt(L.reduce((a,b)=>a+b,0)/n)}`:'');
-  const rows=5,top=SB+44,rh=25,max=Math.max(0,n-rows);dev.scroll=Math.min(dev.scroll,max);
-  if(!n){icon('laps',W/2,top+38,24,C.faint);txt('Ancora nessun giro',W/2,top+66,16,C.dim,'center',600)}
-  const worst=Math.max(...L,1),bestMs=lt.bestMs,barX=W*0.36,barW=W*0.3;
-  for(let r=0;r<rows&&r+dev.scroll<n;r++){const i=n-1-(r+dev.scroll),ms=L[i],y=top+r*rh,isB=i+1===lt.bestNo,cy=y+rh/2;
+  header(n?(n===1?'1 giro':`${n} giri`):'Giri',()=>dev.screen='ready','');
+  if(n){cx.font=FL(20,700);const tw=cx.measureText(n===1?'1 giro':`${n} giri`).width;txt(`media ${fmt(L.reduce((a,b)=>a+b,0)/n)}`,58+tw,SB+21,13,C.dim,'left',500)}
+  button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:shareLaps});
+  button('reset',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')}});
+  const top=SB+41,rh=28,ah=H-top;
+  if(!n){icon('laps',W/2,top+48,24,C.faint);txt('Ancora nessun giro',W/2,top+78,16,C.dim,'center',600);scrollZone=null;return}
+  const off=listArea('scroll',0,top,W,ah,n*rh),bestMs=lt.bestMs;
+  for(let r=0;r<n;r++){const y=top+r*rh-off;if(y+rh<top||y>H)continue;const i=n-1-r,ms=L[i],isB=i+1===lt.bestNo,cy=y+rh/2;
     if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,rh)}
-    num(String(i+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,20,isB?C.gainTxt:C.fg,'left',700);
+    num(String(i+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
     if(i===n-1&&!isB)txt('Ultimo',W*0.42,cy,12,C.dim,'left',600);
-    if(isB)txt('Migliore',W-12,cy,13,C.gainTxt,'right',700);else num(sgn((ms-bestMs)/1000),W-12,cy,16,C.lossTxt,'right',600);
-    hline(12,y+rh,W-24,C.line)}
-  const y=H-46,bw=(W-16-18)/4;
-  button('up',8,y,bw,40,'',{icon:'up',act:()=>dev.scroll=Math.max(0,dev.scroll-rows),disabled:dev.scroll===0});
-  button('dn',8+(bw+6),y,bw,40,'',{icon:'down',act:()=>dev.scroll=Math.min(max,dev.scroll+rows),disabled:dev.scroll>=max});
-  button('share',8+2*(bw+6),y,bw,40,'Condividi',{icon:'share',act:shareLaps,size:15});
-  button('reset',8+3*(bw+6),y,bw,40,'Azzera',{icon:'trash',act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')},size:15})}
+    if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(sgn((ms-bestMs)/1000),W-14,cy,17,C.lossTxt,'right',600);
+    hline(12,y+rh-1,W-24,C.line)}
+  endList('scroll',0,top,W,ah,n*rh)}
 
 // ---------- procedura traguardo ----------
 function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
@@ -432,27 +440,26 @@ function drawWizard(){statusBar('','');
     txt(dev.wizNew?`${trackName()}: puoi rinominarla da Piste`:`${trackName()}: nome e record restano`,W/2,top+118,14,C.dim,'center',500)}}
 
 // ---------- piste ----------
-function openTracks(){dev.screen='tracks';dev.tsel=dev.track>=0?dev.track:(saved.tracks.length?0:-1);dev.tscroll=Math.max(0,dev.tsel-3)}
+function openTracks(){dev.screen='tracks';dev.tsel=dev.track>=0?dev.track:(saved.tracks.length?0:-1);dev.tscroll=Math.max(0,(dev.tsel-2)*30);dev.tscrollV=0}
 function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i].name;r.style.display='flex';setTimeout(()=>{inp.focus();inp.select()},50);
   const close=()=>{r.style.display='none';inp.blur()};
   $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
   $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
 function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
   header('Piste',()=>dev.screen='ready',n?(n===1?'1 salvata':`${n} salvate`):'');
-  const rows=4,top=SB+44,rh=29,max=Math.max(0,n-rows);dev.tscroll=Math.min(dev.tscroll||0,max);
-  if(!n){icon('pin',W/2,top+36,24,C.faint);txt('Nessuna pista: imposta un traguardo per crearne una',W/2,top+66,14,C.dim,'center',500)}
-  const scrollW=n>rows?44:0,colRec=W-scrollW-110,colDist=W-scrollW-14;
-  for(let r=0;r<rows&&r+dev.tscroll<n;r++){const i=r+dev.tscroll,t=T[i],y=top+r*rh,sel=i===dev.tsel,act=i===dev.track,cy=y+rh/2;
-    if(sel){cx.fillStyle=C.selWash;cx.fillRect(0,y,W-scrollW,rh);cx.fillStyle=C.accent;cx.fillRect(0,y+3,3,rh-6)}
+  const top=SB+41,rh=30,ah=H-50-top;
+  if(!n){scrollZone=null;icon('pin',W/2,top+36,24,C.faint);txt('Nessuna pista: imposta un traguardo per crearne una',W/2,top+66,14,C.dim,'center',500)}
+  const colRec=W-110,colDist=W-16,off=n?listArea('tscroll',0,top,W,ah,n*rh):0;
+  for(let i=0;i<n;i++){const t=T[i],y=top+i*rh-off;if(y+rh<top||y>top+ah)continue;const sel=i===dev.tsel,act=i===dev.track,cy=y+rh/2;
+    if(sel){cx.fillStyle=C.selWash;cx.fillRect(0,y,W,rh);cx.fillStyle=C.accent;cx.fillRect(0,y+3,3,rh-6)}
     const dist=dev.gps&&dev.gps.lat?hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon):null;
     const ds=dist==null?'':dist<1000?`${Math.round(dist)} m`:`${(dist/1000).toFixed(dist<10000?1:0)} km`;
     num(t.record?fmt(t.record):'--',colRec,cy,17,t.record?C.gainTxt:C.faint,'right',700);
     txt(ds,colDist,cy,13,C.dim,'right',500);
     const maxName=colRec-90-14;let nm=t.name;cx.font=FL(16,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
     txt(nm,14,cy,16,C.fg,'left',700);if(act){const w=cx.measureText(nm).width;rr(20+w,cy-7,44,14,3,null,C.accentTxt);txt('In uso',42+w,cy+0.5,10,C.accentTxt,'center',700)}
-    hline(12,y+rh,W-scrollW-24,C.line);hits.push({id:'trow'+i,x:0,y,w:W-scrollW,h:rh,act:()=>dev.tsel=i})}
-  if(n>rows){button('tup',W-40,top+2,34,rows*rh/2-6,'',{icon:'up',act:()=>dev.tscroll=Math.max(0,dev.tscroll-1),disabled:dev.tscroll===0});
-    button('tdn',W-40,top+rows*rh/2+2,34,rows*rh/2-6,'',{icon:'down',act:()=>dev.tscroll=Math.min(max,dev.tscroll+1),disabled:dev.tscroll>=max})}
+    hline(12,y+rh-1,W-24,C.line);const vy=Math.max(y,top),vh=Math.min(y+rh,top+ah)-vy;if(vh>4)hits.push({id:'trow'+i,x:0,y:vy,w:W,h:vh,act:()=>dev.tsel=i})}
+  if(n)endList('tscroll',0,top,W,ah,n*rh);
   const ok=dev.tsel>=0&&dev.tsel<n,y=H-46,bw=(W-16-18)/4;
   button('tuse',8,y,bw,40,'Usa',{primary:ok,disabled:!ok,icon:'check',size:16,act:()=>{if(lt.laps.length&&dev.tsel!==dev.track){dev.screen='confirmSwitch';return}useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')}});
   button('tren',8+(bw+6),y,bw,40,'Rinomina',{disabled:!ok,icon:'edit',size:15,act:()=>openRename(dev.tsel)});
@@ -486,7 +493,7 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()})}
 
 // ---------- disegno complessivo ----------
-function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
+function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
   const s=dev.screen;
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
   else if(s==='wizard')drawWizard();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();
@@ -506,9 +513,14 @@ function autoScreens(){const s=dev.screen;
 // ===================== tocco =====================
 const pt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}};
 const hitAt=p=>{for(let i=hits.length-1;i>=0;i--){const h=hits[i];if(p.x>=h.x&&p.x<=h.x+h.w&&p.y>=h.y&&p.y<=h.y+h.h)return h}return null};
-cv.addEventListener('pointerdown',e=>{keepAwake();const h=hitAt(pt(e));pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}});
-cv.addEventListener('pointerup',e=>{const h=hitAt(pt(e));if(h&&h.id===pressed){if(h.dis){if(h.id==='wok')toast(dev.speed>5?'Prima fermati':'Aspetta il GPS')}else if(h.act){h.act();try{navigator.vibrate&&navigator.vibrate(15)}catch(x){}}}pressed=null;setTimeout(goFull,50)});
-cv.addEventListener('pointercancel',()=>pressed=null);
+cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}
+  const z=scrollZone;drag=null;if(z&&z.max>0&&p.x>=z.x&&p.x<=z.x+z.w&&p.y>=z.y&&p.y<=z.y+z.h){dev[z.key+'V']=0;drag={key:z.key,max:z.max,y0:p.y,s0:dev[z.key]||0,on:false,ly:p.y,lt:performance.now(),v:0}}});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const p=pt(e),dy=p.y-drag.y0;if(!drag.on&&Math.abs(dy)>6){drag.on=true;pressed=null}
+  if(drag.on){const t=performance.now(),dt=Math.max(1,t-drag.lt);drag.v=0.6*drag.v+0.4*(-(p.y-drag.ly)/dt*16.7);drag.ly=p.y;drag.lt=t;
+    dev[drag.key]=Math.max(0,Math.min(drag.max,drag.s0-dy))}});
+cv.addEventListener('pointerup',e=>{if(drag&&drag.on){if(performance.now()-drag.lt<80)dev[drag.key+'V']=drag.v;drag=null;pressed=null;return}drag=null;
+  const h=hitAt(pt(e));if(h&&h.id===pressed){if(h.dis){if(h.id==='wok')toast(dev.speed>5?'Prima fermati':'Aspetta il GPS')}else if(h.act){h.act();try{navigator.vibrate&&navigator.vibrate(15)}catch(x){}}}pressed=null;setTimeout(goFull,50)});
+cv.addEventListener('pointercancel',()=>{pressed=null;drag=null});
 
 // ===================== avvio =====================
 resize();
