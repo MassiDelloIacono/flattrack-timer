@@ -11,14 +11,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Barlow Condensed","Roboto Condensed",sans-serif}
-#app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 canvas{display:block;background:#000;touch-action:none}
-#demo{display:none;flex-direction:column;gap:10px;align-items:stretch;min-width:110px}
+#demo{display:none;flex-direction:column;gap:8px;align-items:stretch;width:92px;padding:6px;box-sizing:border-box;align-self:stretch;justify-content:center;background:#0b0b0b}
 #demo.on{display:flex}
-#demo button{font:700 20px "Barlow Condensed",sans-serif;min-height:56px;border-radius:10px;border:2px solid #555;background:#1b1b1b;color:#fff}
+#demo button{font:700 22px "Barlow Condensed",sans-serif;min-height:52px;padding:0 4px;border-radius:10px;border:2px solid #555;background:#1b1b1b;color:#fff}
 #demo .go{background:#ffd21a;color:#111;border-color:#ffd21a}
 #demo small{color:#888;font-size:15px;text-align:center}
-@media (orientation:portrait){#app{flex-direction:column}#demo{flex-direction:row;flex-wrap:wrap;justify-content:center}}
+@media (orientation:portrait){#app{flex-direction:column}#demo{flex-direction:row;flex-wrap:wrap;justify-content:center;width:auto;align-self:stretch}}
 </style>
 </head>
 <body>
@@ -28,9 +28,9 @@ canvas{display:block;background:#000;touch-action:none}
   <div id="demo">
     <small>DEMO</small>
     <button id="dGo" class="go">PARTI</button>
-    <button id="dFast">RITMO +</button>
-    <button id="dSlow">RITMO −</button>
+    <button id="dFast" aria-label="Più veloce">+</button>
     <small id="dPace">ritmo 100%</small>
+    <button id="dSlow" aria-label="Più lento">−</button>
   </div>
 </div>
 <script>
@@ -69,7 +69,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v3';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
+const VERSION='v5';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 
@@ -147,8 +147,8 @@ function demoStep(dtMs){const vS=26*demo.pace*demo.lapF,vC=18*demo.pace*demo.lap
     onGeo(lat,lon,3+Math.random(),demo.v>0.3?demo.v+gauss()*0.1:0,demo.v>1?p.hd:null,Math.round(demo.t))}}
 const $=id=>document.getElementById(id);
 function setSource(src){saved.source=src;persist();origin=null;dev.hist=[];lt.clearLine();dev.track=-1;dev.fix=false;dev.lastT=0;
-  if(src==='demo'){stopPhoneGps();$('demo').classList.add('on')}else{$('demo').classList.remove('on');demo.riding=false;startPhoneGps()}}
-$('dGo').onclick=()=>{demo.riding=!demo.riding;$('dGo').textContent=demo.riding?'FERMATI':'PARTI';$('dGo').classList.toggle('go',!demo.riding)};
+  if(src==='demo'){stopPhoneGps();$('demo').classList.add('on')}else{$('demo').classList.remove('on');demo.riding=false;startPhoneGps()}setTimeout(resize,30)}
+$('dGo').onclick=()=>{demo.riding=!demo.riding;$('dGo').textContent=demo.riding?'STOP':'PARTI';$('dGo').classList.toggle('go',!demo.riding)};
 $('dFast').onclick=()=>{demo.pace=Math.min(1.15,demo.pace+0.02);$('dPace').textContent='ritmo '+Math.round(demo.pace*100)+'%'};
 $('dSlow').onclick=()=>{demo.pace=Math.max(0.85,demo.pace-0.02);$('dPace').textContent='ritmo '+Math.round(demo.pace*100)+'%'};
 
@@ -162,11 +162,16 @@ async function goFull(){if(triedFull)return;triedFull=true;try{await document.do
 
 // ===================== disegno =====================
 const cv=$('scr'),cx=cv.getContext('2d');
-const W=320,H=240,C={bg:'#000',fg:'#fff',dim:'#8c8c8c',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
+let W=320;const H=240,C={bg:'#000',fg:'#fff',dim:'#8c8c8c',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
 let scale=1;
 let lastVW=0,lastVH=0;
-function resize(){lastVW=innerWidth;lastVH=innerHeight;if(!innerWidth||!innerHeight)return;const demoOn=$('demo').classList.contains('on'),vw=innerWidth-(demoOn&&innerWidth>innerHeight?140:0),vh=innerHeight-(demoOn&&innerWidth<=innerHeight?150:0);
-  const s=Math.min(vw/W,vh/H),dpr=devicePixelRatio||1;cv.style.width=W*s+'px';cv.style.height=H*s+'px';cv.width=Math.round(W*s*dpr);cv.height=Math.round(H*s*dpr);scale=s*dpr}
+function resize(){lastVW=innerWidth;lastVH=innerHeight;if(!innerWidth||!innerHeight)return;
+  const land=innerWidth>innerHeight,demoOn=$('demo').classList.contains('on'),dpr=devicePixelRatio||1;
+  const vw=innerWidth-(demoOn&&land?$('demo').offsetWidth:0),vh=innerHeight-(demoOn&&!land?$('demo').offsetHeight:0);
+  let cw,ch;
+  if(vw/vh>=320/240){ch=vh;cw=vw;W=Math.round(240*cw/ch)}      // orizzontale: riempie tutto lo schermo
+  else{W=320;cw=vw;ch=vw*240/320}                                  // verticale: tutta la larghezza
+  cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);scale=ch*dpr/H}
 addEventListener('resize',resize);document.addEventListener('fullscreenchange',()=>setTimeout(resize,100));screen.orientation&&screen.orientation.addEventListener&&screen.orientation.addEventListener('change',()=>setTimeout(resize,100));
 const F=(s,w=700)=>`${w} ${s}px "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
 let hits=[],pressed=null;
@@ -198,8 +203,8 @@ function topBar(center,right){
 function drawBoot(){topBar('','');
   txt('FLAT TRACK',W/2,62,40,C.yellow,'center',800);txt('CRONOMETRO GPS',W/2,94,20,'#fff','center',600);txt(VERSION,W-6,H-8,11,'#555','right',600);
   if(dev.geoErr){fit(dev.geoErr,W/2,132,20,C.red,W-20,700);
-    button('demo1',60,160,W-120,56,'PROVA IN DEMO',{primary:true,act:()=>setSource('demo'),sub:'moto virtuale su un ovale'})}
-  else{const p=dev.lastT?Math.max(0.15,Math.min(1,25/dev.hAcc)):((now()-dev.startedAt)/600%1);rr(70,130,180,12,6,'#222');rr(70,130,Math.max(12,180*p),12,6,C.green);
+    button('demo1',W/2-100,160,200,56,'PROVA IN DEMO',{primary:true,act:()=>setSource('demo'),sub:'moto virtuale su un ovale'})}
+  else{const p=dev.lastT?Math.max(0.15,Math.min(1,25/dev.hAcc)):((now()-dev.startedAt)/600%1);rr(W/2-90,130,180,12,6,'#222');rr(W/2-90,130,Math.max(12,180*p),12,6,C.green);
     fit(dev.lastT?`Precisione ±${Math.round(dev.hAcc)} m · serve meno di 25 m`:'Cerco il GPS… stai all\'aperto',W/2,162,17,C.dim,W-20,600);
     button('demo2',W/2-70,186,140,40,'DEMO',{act:()=>setSource('demo'),size:18})}}
 
@@ -214,7 +219,7 @@ function drawReady(){const tk=dev.track>=0?`PISTA ${dev.track+1}`:'NESSUNA PISTA
     const avg=lt.laps.reduce((a,b)=>a+b,0)/n;
     [['ULTIMO',fmt(lt.lastMs)],['GIRI',String(n)],['MEDIA',fmt(avg)]].forEach((c,i)=>{const x=W/6+i*W/3;txt(c[0],x,128,13,C.dim,'center',600);txt(c[1],x,148,22,'#fff')})}
   const bw=(W-28-16)/3;
-  button('laps',14,176,bw,54,'GIRI',{act:()=>{dev.screen='laps';dev.scroll=0},sub:n?`${n} giri`:'nessuno'});
+  button('laps',14,176,bw,54,'GIRI',{act:()=>{dev.screen='laps';dev.scroll=0},sub:n?(n===1?'1 giro':`${n} giri`):'nessuno'});
   button('line',14+bw+8,176,bw,54,'TRAGUARDO',{act:startWizard,sub:lt.line?'cambia':'imposta'});
   button('set',14+2*(bw+8),176,bw,54,'OPZIONI',{act:()=>dev.screen='settings',sub:'gps, vista…'})}
 
@@ -243,7 +248,7 @@ function drawRace(){
   hits.push({id:'view',x:0,y:26,w:W,h:H-26,act:()=>{saved.view=1-saved.view;persist()}})}
 
 function drawLaps(){topBar('','');const L=lt.laps,n=L.length;
-  txt(n?`${n} giri`:'Giri',12,46,26,'#fff','left',800);
+  txt(n?(n===1?'1 giro':`${n} giri`):'Giri',12,46,26,'#fff','left',800);
   if(n){const avg=L.reduce((a,b)=>a+b,0)/n;txt(`media ${fmt(avg)}`,12,66,14,C.dim,'left',600)}
   button('close',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
   const rows=5,top=80,rh=22,max=Math.max(0,n-rows);dev.scroll=Math.min(dev.scroll,max);
@@ -268,7 +273,7 @@ function drawWizard(){topBar('TRAGUARDO','');
     button('wcancel',14,170,100,58,'ANNULLA',{act:()=>dev.screen='ready',size:20});
     button('wok',122,170,W-136,58,'SONO SULLA LINEA',{primary:true,size:24,disabled:moving||!dev.fix,act:()=>{dev.pend={lat:dev.gps.lat,lon:dev.gps.lon};dev.wiz=2}})}
   else if(dev.wiz===2){fit('2 · Ora parti in avanti',W/2,56,30,'#fff',W-20,800);
-    const a=(now()/600)%1,x=60+a*150;cx.fillStyle=C.yellow;cx.beginPath();cx.moveTo(x,112);cx.lineTo(x+40,112);cx.lineTo(x+40,98);cx.lineTo(x+70,124);cx.lineTo(x+40,150);cx.lineTo(x+40,136);cx.lineTo(x,136);cx.closePath();cx.fill();
+    const a=(now()/600)%1,x=40+a*(W-150);cx.fillStyle=C.yellow;cx.beginPath();cx.moveTo(x,112);cx.lineTo(x+40,112);cx.lineTo(x+40,98);cx.lineTo(x+70,124);cx.lineTo(x+40,150);cx.lineTo(x+40,136);cx.lineTo(x,136);cx.closePath();cx.fill();
     fit('la direzione di marcia la prendo da solo',W/2,170,16,C.dim,W-20,600);
     button('wcancel2',W/2-60,190,120,42,'ANNULLA',{act:()=>{dev.screen='ready';dev.wiz=0},size:18})}
   else{cx.strokeStyle=C.green;cx.lineWidth=9;cx.lineCap='round';cx.beginPath();cx.moveTo(130,84);cx.lineTo(152,106);cx.lineTo(194,62);cx.stroke();
@@ -285,12 +290,12 @@ function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condivi
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 function drawSettings(){topBar('','');
-  txt('Opzioni',12,46,26,'#fff','left',800);txt(VERSION,82,48,12,'#555','left',600);button('sclose',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
+  txt('Opzioni',12,46,26,'#fff','left',800);txt(VERSION,W-104,50,12,'#555','right',600);button('sclose',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
   txt('GPS',14,98,19,'#fff','left',600);
   [['TELEFONO','phone'],['DEMO','demo']].forEach(([l,v],i)=>button('src'+i,130+i*92,78,88,40,l,{primary:saved.source===v,size:19,act:()=>{if(saved.source!==v){setSource(v);resize()}}}));
   txt('Giro minimo',14,144,19,'#fff','left',600);
   button('dmin',130,124,48,40,'−',{act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()},size:26});
-  txt(saved.minLap+' s',214,144,20,C.yellow);
+  txt(saved.minLap+' s',(178+W-62)/2,144,20,C.yellow);
   button('imin',W-62,124,48,40,'+',{act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()},size:26});
   txt('Vista in gara',14,190,19,'#fff','left',600);
   ['DELTA','TEMPO'].forEach((l,i)=>button('v'+i,130+i*92,170,88,40,l,{primary:saved.view===i,size:19,act:()=>{saved.view=i;persist()}}));
