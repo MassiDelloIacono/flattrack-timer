@@ -8,18 +8,18 @@
 <title>Flat Track Timer</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Barlow Condensed","Roboto Condensed",sans-serif}
 #app{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;display:flex;align-items:stretch;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #stage{flex:1 1 auto;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 canvas{display:block;background:#000;touch-action:none}
-#demo{display:none;flex-direction:column;align-items:stretch;width:92px;padding:6px;box-sizing:border-box;align-self:stretch;justify-content:center;background:#0b0b0b}
+#demo{display:none;flex-direction:column;align-items:stretch;width:92px;padding:8px;box-sizing:border-box;align-self:stretch;justify-content:center;background:#000;border-left:1px solid #26313b}
 #demo.on{display:flex}
 #demo>*+*{margin-top:8px}
-#demo button{font:700 22px "Barlow Condensed",sans-serif;min-height:52px;padding:0 4px;border-radius:10px;border:2px solid #555;background:#1b1b1b;color:#fff}
-#demo .go{background:#ffd21a;color:#111;border-color:#ffd21a}
-#demo small{color:#888;font-size:15px;text-align:center}
+#demo button{font:700 20px "Barlow",sans-serif;min-height:50px;padding:0 4px;border-radius:6px;border:1.5px solid #26313b;background:transparent;color:#fff}
+#demo .go{background:transparent;color:#4cb8ff;border-color:#3fb2ff}
+#demo small{color:#9aa3ad;font:600 13px "Barlow",sans-serif;text-align:center}
 @media (orientation:portrait){#app{flex-direction:column}#demo>*+*{margin-top:0;margin-left:8px}#demo{flex-direction:row;flex-wrap:wrap;justify-content:center;width:auto;align-self:stretch}}
 </style>
 </head>
@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v11';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v15';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -182,10 +182,16 @@ async function goFull(){if(triedFull)return;triedFull=true;try{await document.do
 // ===================== disegno =====================
 const cv=$('scr'),cx=cv.getContext('2d');
 // SERA: nero, testi chiari (niente abbagliamento al buio). GIORNO: bianco, testi neri (vince sui riflessi al sole)
-const NIGHT={bg:'#000000',fg:'#ffffff',dim:'#a8a8a8',faint:'#5c5c5c',off:'#333333',top:'#0d0d0d',green:'#1fe36f',red:'#ff3d33',redTxt:'#ff8a84',accent:'#ffd21a',yellow:'#ffd21a',
-  btn:'#1b1b1b',btnB:'#3d3d3d',btnDown:'#2c2c2c',btnFg:'#ffffff',btnDis:'#555555',grid:'#2a2a2a',chart:'#5a5a5a',panel:'rgba(255,255,255,.06)'};
-const DAY={bg:'#ffffff',fg:'#000000',dim:'#3a3a3a',faint:'#6e6e6e',off:'#cfcfcf',top:'#ebebeb',green:'#08893a',red:'#d81f16',redTxt:'#c3231a',accent:'#8a5a00',yellow:'#ffd21a',
-  btn:'#f1f1f1',btnB:'#7d7d7d',btnDown:'#d6d6d6',btnFg:'#000000',btnDis:'#a8a8a8',grid:'#c4c4c4',chart:'#9a9a9a',panel:'rgba(0,0,0,.06)'};
+const NIGHT={bg:'#000000',surface:'#000000',line:'#26313b',frame:'#2d7fbf',fg:'#ffffff',dim:'#8d99a5',faint:'#56616b',off:'#1d252d',
+  accent:'#3fb2ff',accentDown:'#1f8fd6',accentTxt:'#4cb8ff',onAccent:'#001018',
+  gain:'#22d36b',gainTxt:'#2fe07a',gainDeep:'#0b7a37',gainWash:'rgba(34,211,107,.10)',
+  loss:'#ff453a',lossTxt:'#ff6b61',lossDeep:'#a3160e',
+  btn:'#000000',btnDown:'rgba(63,178,255,.16)',chart:'#3a4652',selWash:'rgba(63,178,255,.12)'};
+const DAY={bg:'#ffffff',surface:'#ffffff',line:'#cfd7df',frame:'#1f78c4',fg:'#05080b',dim:'#46525e',faint:'#87929d',off:'#e1e6eb',
+  accent:'#0a74c9',accentDown:'#075a9c',accentTxt:'#0a63ad',onAccent:'#ffffff',
+  gain:'#15a046',gainTxt:'#0b7d38',gainDeep:'#0b7a37',gainWash:'rgba(21,160,70,.10)',
+  loss:'#d92a20',lossTxt:'#c0221b',lossDeep:'#a3160e',
+  btn:'#ffffff',btnDown:'rgba(10,116,201,.12)',chart:'#aab4be',selWash:'rgba(10,116,201,.10)'};
 // altezza del sole sull'orizzonte (gradi) per posizione e ora: serve alla modalità AUTO
 function sunElev(lat,lon,d){const r=Math.PI/180,n=d.getTime()/86400000+2440587.5-2451545;
   const Lm=(280.46+0.9856474*n)%360,g=((357.528+0.9856003*n)%360)*r,lam=(Lm+1.915*Math.sin(g)+0.02*Math.sin(2*g))*r,eps=(23.439-0.0000004*n)*r;
@@ -212,209 +218,288 @@ function resize(){
   else{W=320;cw=vw;ch=vw*240/320}                                  // verticale: tutta la larghezza
   cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);scale=ch*dpr/H}
 addEventListener('resize',resize);document.addEventListener('fullscreenchange',()=>setTimeout(resize,100));screen.orientation&&screen.orientation.addEventListener&&screen.orientation.addEventListener('change',()=>setTimeout(resize,100));
-const F=(s,w=700)=>`${w} ${s}px "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
+// ---------- tipografia: etichette in Barlow, numeri in Barlow Condensed a cifre di larghezza fissa ----------
+const FN=(s,w=700)=>`${w} ${s}px "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
+const FL=(s,w=600)=>`${w} ${s}px "Barlow","Roboto","Helvetica Neue",sans-serif`;
+const F=FN;
 let hits=[],pressed=null;
-function txt(t,x,y,size,col,al='center',w=700){cx.font=F(size,w);cx.fillStyle=col;cx.textAlign=al;cx.textBaseline='middle';cx.fillText(t,x,y)}
-function fit(t,x,y,size,col,maxW,w=700){cx.font=F(size,w);while(cx.measureText(t).width>maxW&&size>10){size-=2;cx.font=F(size,w)}txt(t,x,y,size,col,'center',w)}
-function rr(x,y,w,h,r,fill,stroke){cx.beginPath();cx.roundRect(x,y,w,h,r);if(fill){cx.fillStyle=fill;cx.fill()}if(stroke){cx.strokeStyle=stroke;cx.lineWidth=1.5;cx.stroke()}}
+function txt(t,x,y,size,col,al='left',w=600,fam='l'){cx.font=fam==='n'?FN(size,w):FL(size,w);cx.fillStyle=col;cx.textAlign=al;cx.textBaseline='middle';cx.fillText(t,x,y)}
+function fitT(t,x,y,size,col,maxW,al='left',w=600,fam='l'){const f=fam==='n'?FN:FL;cx.font=f(size,w);while(cx.measureText(t).width>maxW&&size>9){size--;cx.font=f(size,w)}
+  txt(t,x,y,size,col,al,w,fam);return cx.measureText(t).width}
+const isDig=ch=>ch>='0'&&ch<='9';
+function numMetrics(t,size,w){cx.font=FN(size,w);let dw=0;for(const d of '0123456789')dw=Math.max(dw,cx.measureText(d).width);
+  let tot=0;for(const ch of t)tot+=isDig(ch)?dw:cx.measureText(ch).width;return{tot,dw}}
+// numero con cifre a larghezza fissa: non "balla" mentre scorre
+function num(t,x,y,size,col,al='center',w=700,maxW=1e9){let m=numMetrics(t,size,w);while(m.tot>maxW&&size>10){size-=2;m=numMetrics(t,size,w)}
+  let sx=al==='center'?x-m.tot/2:al==='right'?x-m.tot:x;cx.fillStyle=col;cx.textBaseline='middle';cx.textAlign='center';
+  for(const ch of t){const cw=isDig(ch)?m.dw:cx.measureText(ch).width;cx.fillText(ch,sx+cw/2,y);sx+=cw}return m.tot}
+function rr(x,y,w,h,r,fill,stroke,lw=1){cx.beginPath();cx.roundRect(x,y,w,h,r);if(fill){cx.fillStyle=fill;cx.fill()}if(stroke){cx.strokeStyle=stroke;cx.lineWidth=lw;cx.stroke()}}
+const hline=(x,y,w,col)=>{cx.fillStyle=col;cx.fillRect(x,y,w,1)};
+const mix=(a,b,k)=>{const p=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)),A=p(a),B=p(b);return`rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')})`};
+
+// ---------- icone vettoriali (riquadro s×s centrato in x,y) ----------
+function icon(name,x,y,s,col){cx.save();cx.translate(x,y);cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=Math.max(1.6,s/9);cx.lineCap='round';cx.lineJoin='round';const h=s/2;cx.beginPath();
+  switch(name){
+    case'laps':for(let i=-1;i<=1;i++){cx.moveTo(-h*0.35,i*h*0.6);cx.lineTo(h,i*h*0.6);cx.moveTo(-h,i*h*0.6);cx.arc(-h*0.8,i*h*0.6,1,0,7)}cx.stroke();break;
+    case'pin':cx.arc(0,-h*0.25,h*0.55,Math.PI*0.85,Math.PI*2.15);cx.lineTo(0,h);cx.closePath();cx.stroke();cx.beginPath();cx.arc(0,-h*0.25,h*0.18,0,7);cx.fill();break;
+    case'gear':for(let i=0;i<8;i++){const a=i*Math.PI/4;cx.moveTo(Math.cos(a)*h*0.62,Math.sin(a)*h*0.62);cx.lineTo(Math.cos(a)*h*0.95,Math.sin(a)*h*0.95)}cx.stroke();cx.beginPath();cx.arc(0,0,h*0.6,0,7);cx.stroke();cx.beginPath();cx.arc(0,0,h*0.22,0,7);cx.stroke();break;
+    case'flag':cx.moveTo(-h*0.75,h);cx.lineTo(-h*0.75,-h);cx.stroke();for(let r=0;r<3;r++)for(let c=0;c<3;c++)if((r+c)%2===0)cx.fillRect(-h*0.75+c*h*0.55,-h+r*h*0.4,h*0.55,h*0.4);cx.strokeRect(-h*0.75,-h,h*1.65,h*1.2);break;
+    case'back':cx.moveTo(h*0.35,-h*0.75);cx.lineTo(-h*0.4,0);cx.lineTo(h*0.35,h*0.75);cx.stroke();break;
+    case'up':cx.moveTo(-h*0.7,h*0.35);cx.lineTo(0,-h*0.4);cx.lineTo(h*0.7,h*0.35);cx.stroke();break;
+    case'down':cx.moveTo(-h*0.7,-h*0.35);cx.lineTo(0,h*0.4);cx.lineTo(h*0.7,-h*0.35);cx.stroke();break;
+    case'share':cx.moveTo(0,h*0.25);cx.lineTo(0,-h);cx.moveTo(-h*0.45,-h*0.55);cx.lineTo(0,-h);cx.lineTo(h*0.45,-h*0.55);cx.moveTo(-h*0.35,-h*0.2);cx.lineTo(-h*0.8,-h*0.2);cx.lineTo(-h*0.8,h);cx.lineTo(h*0.8,h);cx.lineTo(h*0.8,-h*0.2);cx.lineTo(h*0.35,-h*0.2);cx.stroke();break;
+    case'edit':cx.moveTo(-h*0.8,h*0.8);cx.lineTo(-h*0.65,h*0.25);cx.lineTo(h*0.45,-h*0.85);cx.lineTo(h*0.85,-h*0.45);cx.lineTo(-h*0.25,h*0.65);cx.closePath();cx.stroke();break;
+    case'trash':cx.moveTo(-h*0.85,-h*0.55);cx.lineTo(h*0.85,-h*0.55);cx.moveTo(-h*0.3,-h*0.55);cx.lineTo(-h*0.25,-h*0.9);cx.lineTo(h*0.25,-h*0.9);cx.lineTo(h*0.3,-h*0.55);cx.moveTo(-h*0.6,-h*0.55);cx.lineTo(-h*0.45,h*0.9);cx.lineTo(h*0.45,h*0.9);cx.lineTo(h*0.6,-h*0.55);cx.stroke();break;
+    case'plus':cx.moveTo(0,-h*0.8);cx.lineTo(0,h*0.8);cx.moveTo(-h*0.8,0);cx.lineTo(h*0.8,0);cx.stroke();break;
+    case'check':cx.moveTo(-h*0.8,0);cx.lineTo(-h*0.2,h*0.6);cx.lineTo(h*0.85,-h*0.6);cx.stroke();break;
+    case'play':cx.moveTo(-h*0.5,-h*0.8);cx.lineTo(h*0.8,0);cx.lineTo(-h*0.5,h*0.8);cx.closePath();cx.fill();break;
+    case'arrowR':cx.moveTo(-h,0);cx.lineTo(h*0.8,0);cx.moveTo(h*0.2,-h*0.6);cx.lineTo(h*0.85,0);cx.lineTo(h*0.2,h*0.6);cx.stroke();break;
+  }cx.restore()}
+
+// ---------- pulsanti ----------
+// riquadro a filo sottile con etichetta incastrata nel bordo superiore (sx) ed eventuale valore a destra
+function panel(x,y,w,h,label,labelR,col){col=col||C.frame;rr(x,y,w,h,8,null,col,1.5);
+  const tab=(t,tx,al)=>{cx.font=FL(12,700);const lw=cx.measureText(t).width+10,bx=al==='right'?tx-lw+5:tx-5;cx.fillStyle=C.bg;cx.fillRect(bx,y-3,lw,6);txt(t,tx,y,12,col===C.line?C.dim:col,al,700)};
+  if(label)tab(label,x+16,'left');if(labelR)tab(labelR,x+w-16,'right')}
 function button(id,x,y,w,h,label,opt={}){const down=pressed===id,dis=opt.disabled;
-  const bg=opt.primary?(dis?'#4a4320':down?'#c9a40f':C.yellow):opt.danger?(down?'#a3241d':'#d22c24'):(down?C.btnDown:C.btn);
-  rr(x,y,w,h,8,bg,opt.primary||opt.danger?null:C.btnB);
-  const col=opt.primary?(dis?'#8a8160':'#111'):(dis?C.btnDis:C.btnFg);
-  if(opt.sub){fit(label,x+w/2,y+h/2-8,opt.size||22,col,w-12);fit(opt.sub,x+w/2,y+h/2+13,13,opt.primary?'#3b3410':C.dim,w-12,600)}
-  else fit(label,x+w/2,y+h/2+1,opt.size||22,col,w-12);
+  let bg=down?C.btnDown:null,fg=dis?C.faint:C.fg,stroke=dis?C.off:C.line;
+  if(opt.primary&&!dis){stroke=C.accent;fg=C.accentTxt}
+  else if(opt.danger){stroke=C.loss;fg=C.lossTxt}
+  else if(opt.ghost){stroke=null}
+  rr(x,y,w,h,6,bg,stroke,1.5);
+  const size=opt.size||17,ic=opt.icon,isz=Math.min(18,h*0.42);
+  if(opt.sub){const cxm=x+w/2;if(ic)icon(ic,cxm,y+h*0.32,isz,dis?C.faint:C.accentTxt);
+    fitT(label,cxm,ic?y+h*0.62:y+h/2-7,size,fg,w-12,'center',700);fitT(opt.sub,cxm,ic?y+h*0.84:y+h/2+11,12,C.dim,w-12,'center',500)}
+  else{cx.font=FL(size,700);const lw=label?Math.min(cx.measureText(label).width,w-(ic?isz+22:14)):0,gap=ic&&label?8:0,tot=(ic?isz:0)+gap+lw,sx=x+(w-tot)/2;
+    if(ic)icon(ic,sx+isz/2,y+h/2,isz,fg);if(label)fitT(label,sx+(ic?isz+gap:0),y+h/2+1,size,fg,w-(ic?isz+22:14),'left',700)}
   hits.push({id,x,y,w,h,act:opt.act,dis})}
+// controllo segmentato (opzioni alternative)
+function segmented(id,x,y,w,h,opts,cur,set){const n=opts.length,sw=w/n;rr(x,y,w,h,6,null,C.line,1.5);
+  opts.forEach(([l,v],k)=>{const sx=x+k*sw,sel=cur===v;if(sel)rr(sx+2,y+2,sw-4,h-4,5,C.selWash,C.accent,1.5);else if(k&&cur!==opts[k-1][1])cx.fillStyle=C.line,cx.fillRect(sx,y+7,1,h-14);
+    fitT(l,sx+sw/2,y+h/2+1,15,sel?C.accentTxt:C.dim,sw-8,'center',700);hits.push({id:id+k,x:sx,y,w:sw,h,act:()=>set(v)})})}
+
 function fmt(ms,big){if(!ms&&ms!==0)return'--';const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,c=Math.floor(ms%1000/10),d=Math.floor(ms%1000/100);
   return m>0?(big?`${m}:${String(s).padStart(2,'0')}.${d}`:`${m}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`):`${s}.${String(c).padStart(2,'0')}`}
+const fmt1=ms=>fmt(ms,true).replace(/(\.\d)\d$/,'$1');
 const sgn=v=>(v<0?'−':'+')+Math.abs(v).toFixed(2);
 
-function topBar(center,right){
-  cx.fillStyle=C.top;cx.fillRect(0,0,W,26);
-  const col=!dev.fix?C.red:dev.hAcc>8?C.accent:C.green;
-  for(let i=0;i<4;i++){const h=5+i*3,on=dev.sats>=[1,5,9,12][i];cx.fillStyle=on?col:C.off;cx.fillRect(8+i*6,20-h,4,h)}
-  txt(dev.fix?`±${Math.round(dev.hAcc)} m`:'GPS',36,13,15,col,'left');
-  const demoOn=saved.source==='demo';
-  if(demoOn){const open=$('demo').classList.contains('on');rr(84,5,44,17,4,open?'#fff':C.yellow);txt('DEMO',106,14,13,'#111');hits.push({id:'demoBadge',x:76,y:0,w:60,h:26,act:toggleDemoPanel})}
-  fit(center,W/2+(demoOn?22:10),13,17,C.fg,demoOn?120:150);
-  if(dev.battery!=null){const b=Math.round(dev.battery);rr(W-40,7,24,12,2,null,'#888');cx.fillStyle='#888';cx.fillRect(W-16,10,2,6);cx.fillStyle=b<20?C.red:dev.charging?C.green:C.dim;cx.fillRect(W-38,9,20*b/100,8)}
-  if(right)txt(right,W-46,13,16,C.fg,'right')}
+// ---------- barra di stato ----------
+const SB=24,TB=36;
+function statusBar(center,lapTxt){
+  hline(0,SB-1,W,C.line);
+  const col=!dev.fix?C.loss:dev.hAcc>8?C.accentTxt:C.gainTxt;
+  for(let i=0;i<4;i++){const h=4+i*3,on=dev.fix&&dev.sats>=[1,5,9,12][i];cx.fillStyle=on?col:C.off;cx.fillRect(8+i*5,19-h,3,h)}
+  txt(dev.fix?`±${Math.round(dev.hAcc)} m`:'Nessun GPS',32,12,13,col,'left',600);
+  let lx=32+(cx.measureText(dev.fix?`±${Math.round(dev.hAcc)} m`:'Nessun GPS').width)+10;
+  if(saved.source==='demo'){const open=$('demo').classList.contains('on');rr(lx,5,42,15,4,open?C.accent:null,C.accentTxt);txt('Demo',lx+21,12.5,12,open?C.onAccent:C.accentTxt,'center',700);
+    hits.push({id:'demoBadge',x:lx-6,y:0,w:56,h:SB+4,act:toggleDemoPanel});lx+=50}
+  if(center)fitT(center,W/2,12,14,C.fg,Math.max(60,W-2*Math.max(lx,110)),'center',700);
+  let rx=W-8;
+  if(dev.battery!=null){const b=Math.round(dev.battery);rr(rx-22,7,20,10,2,null,C.dim);cx.fillStyle=C.dim;cx.fillRect(rx-2,10,2,4);
+    cx.fillStyle=b<20?C.loss:dev.charging?C.gainTxt:C.fg;cx.fillRect(rx-20,9,16*b/100,6);rx-=28}
+  if(lapTxt){num(lapTxt,rx,12.5,16,C.fg,'right',700)}}
+// intestazione delle sottoschermate: ‹ titolo
+function header(title,backAct,right){
+  button('back',4,SB+4,40,32,'',{ghost:true,icon:'back',act:backAct});
+  txt(title,46,SB+20,20,C.fg,'left',700);
+  if(right)txt(right,W-12,SB+20,13,C.dim,'right',500);
+  hline(0,SB+40,W,C.line)}
+// barra schede in basso (riepilogo)
+function tabBar(){const th=TB,y=H-th,tw=W/3,n=lt.laps.length;hline(0,y,W,C.line);
+  [['laps','laps','Giri',n?String(n):'',()=>{dev.screen='laps';dev.scroll=0}],
+   ['tracks','pin','Piste',saved.tracks.length?String(saved.tracks.length):'',openTracks],
+   ['set','gear','Opzioni','',()=>dev.screen='settings']].forEach(([id,ic,l,cnt,act],k)=>{const x=k*tw,down=pressed===id,cy=y+th/2+1;
+    if(down){cx.fillStyle=C.btnDown;cx.fillRect(x,y+1,tw,th-1)}
+    cx.font=FL(15,600);const lw=cx.measureText(l).width;cx.font=FN(15,600);const cw=cnt?cx.measureText(cnt).width+6:0,tot=14+7+lw+cw,sx=x+(tw-tot)/2;
+    icon(ic,sx+7,cy,13,C.dim);txt(l,sx+21,cy,15,C.fg,'left',600);if(cnt)txt(cnt,sx+21+lw+6,cy,15,C.dim,'left',600,'n');
+    hits.push({id,x,y,w:tw,h:th,act})})}
+// ---------- avvio ----------
+function drawBoot(){statusBar('','');
+  txt('Flat Track',W/2,70,44,C.accentTxt,'center',800,'n');txt('Cronometro GPS',W/2,102,16,C.dim,'center',500);
+  txt(VERSION,W-8,H-10,11,C.faint,'right',500);
+  if(dev.geoErr){fitT(dev.geoErr,W/2,140,16,C.loss,W-20,'center',600);
+    button('demo1',W/2-110,166,220,46,'Prova in demo',{primary:true,icon:'play',act:()=>setSource('demo')})}
+  else{const p=dev.lastT?Math.max(0.15,Math.min(1,25/dev.hAcc)):((now()-dev.startedAt)/900%1);rr(W/2-100,132,200,4,2,C.off);rr(W/2-100,132,Math.max(8,200*p),4,2,C.gain);
+    fitT(dev.lastT?`Precisione ±${Math.round(dev.hAcc)} m, serve meno di 25 m`:'Cerco il segnale GPS, stai all\'aperto',W/2,152,14,C.dim,W-20,'center',500);
+    button('demo2',W/2-60,180,120,36,'Demo',{icon:'play',act:()=>setSource('demo'),size:15})}}
 
-function drawBoot(){topBar('','');
-  txt('FLAT TRACK',W/2,62,40,C.accent,'center',800);txt('CRONOMETRO GPS',W/2,94,20,C.fg,'center',600);txt(VERSION,W-6,H-8,11,C.faint,'right',600);
-  if(dev.geoErr){fit(dev.geoErr,W/2,132,20,C.red,W-20,700);
-    button('demo1',W/2-100,160,200,56,'PROVA IN DEMO',{primary:true,act:()=>setSource('demo'),sub:'moto virtuale su un ovale'})}
-  else{const p=dev.lastT?Math.max(0.15,Math.min(1,25/dev.hAcc)):((now()-dev.startedAt)/600%1);rr(W/2-90,130,180,12,6,C.off);rr(W/2-90,130,Math.max(12,180*p),12,6,C.green);
-    fit(dev.lastT?`Precisione ±${Math.round(dev.hAcc)} m · serve meno di 25 m`:'Cerco il GPS… stai all\'aperto',W/2,162,17,C.dim,W-20,600);
-    button('demo2',W/2-70,186,140,40,'DEMO',{act:()=>setSource('demo'),size:18})}}
-
-// grafico a barre degli ultimi giri: più alta = più lento, il migliore in verde
+// ---------- grafico giri ----------
 function drawChart(x,y,w,h){const L=lt.laps.slice(-12),n=L.length;if(!n)return;
-  txt('ULTIMI GIRI',x,y+6,12,C.dim,'left',600);const top=y+16,bh=h-34,lo=Math.min(...L),hi=Math.max(...L),span=Math.max(300,hi-lo);
-  const gap=4,bw=Math.min(26,(w-gap*(n-1))/n),off=lt.laps.length-n;
-  for(let k=0;k<n;k++){const v=L[k],hh=8+(v-lo)/span*(bh-8),bx=x+k*(bw+gap),isB=off+k+1===lt.bestNo,last=k===n-1;
-    cx.fillStyle=isB?C.green:last?C.fg:C.chart;cx.fillRect(bx,top+bh-hh,bw,hh)}
-  txt(`scarto ${((hi-lo)/1000).toFixed(2)} s`,x,y+h-6,13,C.dim,'left',600)}
-function drawReady(){topBar(trackName()||'NESSUNA PISTA','');
-  const n=lt.laps.length;
-  if(!lt.line){txt('Nessun traguardo',W/2,52,18,C.dim,'center',600);
-    if(saved.tracks.length){const bw2=Math.round((W-36)*0.62);
-      button('setline',14,68,bw2,90,'NUOVO TRAGUARDO',{primary:true,size:26,sub:'fermati sulla linea',act:startWizard});
-      button('pick',22+bw2,68,W-36-bw2,90,'SCEGLI PISTA',{size:20,sub:`${saved.tracks.length} salvate`,act:openTracks})}
-    else button('setline',14,68,W-28,90,'IMPOSTA TRAGUARDO',{primary:true,size:30,sub:'fermati sulla linea e tocca qui',act:startWizard})}
-  else if(!n){const tk=saved.tracks[dev.track];txt(lt.inLap?'IN GIRO':'PRONTO',W/2,72,52,C.fg,'center',800);
-    if(tk&&tk.record)txt('record pista '+fmt(tk.record),W/2,40,15,C.green,'center',700);
-    fit(lt.inLap?'riparti per continuare':'passa sul traguardo per partire',W/2,112,18,C.dim,W-20,600);
-    txt('il cronometro parte da solo',W/2,138,15,C.faint,'center',600)}
-  else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,wide=W>=440,cxL=wide?W*0.27:W/2,half=wide?W*0.54:W;
-    txt(`MIGLIORE · GIRO ${lt.bestNo}`,cxL,44,15,C.dim,'center',600);fit(fmt(lt.bestMs),cxL,88,64,C.green,half-24,800);
-    [['ULTIMO',fmt(lt.lastMs)],['GIRI',String(n)],['MEDIA',fmt(avg)]].forEach((c,k)=>{const x=half/6+k*half/3;txt(c[0],x,128,13,C.dim,'center',600);txt(c[1],x,148,22,C.fg)});
-    if(wide)drawChart(half+6,36,W-half-20,124)}
-  const bw=(W-28-16)/3;
-  button('laps',14,176,bw,54,'GIRI',{act:()=>{dev.screen='laps';dev.scroll=0},sub:n?(n===1?'1 giro':`${n} giri`):'nessuno'});
-  button('tracks',14+bw+8,176,bw,54,'PISTE',{act:openTracks,sub:saved.tracks.length?`${saved.tracks.length} salvate`:'nessuna'});
-  button('set',14+2*(bw+8),176,bw,54,'OPZIONI',{act:()=>dev.screen='settings',sub:'schermo, vista…'})}
+  const top=y+16,bh=h-38,lo=Math.min(...L),hi=Math.max(...L),span=Math.max(300,hi-lo);
+  hline(x,top+bh,w,C.line);const gap=4,bw=Math.min(22,(w-gap*(n-1))/n),off=lt.laps.length-n;
+  for(let k=0;k<n;k++){const v=L[k],hh=6+(v-lo)/span*(bh-8),bx=x+k*(bw+gap),isB=off+k+1===lt.bestNo,last=k===n-1;
+    cx.fillStyle=isB?C.gain:last?C.fg:C.chart;cx.fillRect(bx,top+bh-hh,bw,hh)}
+  txt('Più alta = più lenta',x,y+h-12,11,C.faint,'left',500);num(`±${((hi-lo)/2000).toFixed(2)}`,x+w,y+h-12,13,C.dim,'right',600)}
 
-const mix=(a,b,k)=>{const p=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)),A=p(a),B=p(b);return`rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')})`};
-function deltaTrend(){const H=dev.dHist||[];if(H.length<2)return 0;const a=H[0],b=H[H.length-1];return b[0]-a[0]>1200?(b[1]-a[1])/((b[0]-a[0])/1000):0}
-function bottomCells(){const n=lt.laps.length,three=W>=400&&lt.deltaValid,cells=[['ULTIMO',fmt(lt.lastMs),C.fg]];
-  if(three)cells.push(['PREVISTO',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),lt.delta<0?C.green:C.redTxt]);
-  cells.push(['MIGLIORE',fmt(lt.bestMs),C.green]);
-  const cw=W/cells.length,hl=now()<dev.lapHl;
-  cx.fillStyle=C.bg;cx.fillRect(0,192,W,48);cx.fillStyle=C.grid;cx.fillRect(0,192,W,1);
-  cells.forEach((c,k)=>{const x=k*cw;if(k)cx.fillRect(x,192,1,48);
-    if(k===0&&hl){cx.fillStyle=C.yellow;cx.fillRect(x,193,cw,47);txt(c[0],x+cw/2,203,12,'#3b3410','center',700);txt(c[1],x+cw/2,224,26,'#111','center',800);cx.fillStyle='#2a2a2a';return}
-    txt(c[0],x+cw/2,203,12,C.dim,'center',600);txt(c[1],x+cw/2,224,26,c[2],'center',800);cx.fillStyle=C.grid})}
+// ---------- riepilogo da fermo ----------
+function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB,bot=H-TB,tk=saved.tracks[dev.track];
+  if(!lt.line){icon('flag',W/2,top+34,26,C.accentTxt);txt('Nessun traguardo',W/2,top+64,22,C.fg,'center',700);
+    txt('Fermati sulla linea e impostalo, oppure scegli una pista salvata',W/2,top+86,13,C.dim,'center',500);
+    const hasT=saved.tracks.length,bw=hasT?Math.min(200,(W-40)/2):Math.min(260,W-40),x0=hasT?W/2-bw-6:W/2-bw/2;
+    button('setline',x0,top+108,bw,44,'Imposta traguardo',{primary:true,icon:'flag',act:startWizard,size:16});
+    if(hasT)button('pick',W/2+6,top+108,bw,44,'Scegli pista',{icon:'pin',act:openTracks,size:16})}
+  else if(!n){panel(10,top+16,W-20,98,lt.inLap?'Giro in corso':'Pronto');
+    txt(lt.inLap?'Riparti per continuare il giro':'Passa sul traguardo',W/2,top+56,24,C.fg,'center',700);
+    txt(lt.inLap?'Il tempo riprende appena superi i 15 km/h':'Il cronometro parte da solo',W/2,top+84,14,C.dim,'center',500);
+    const pw=(W-28)/2,py=top+128,ph=bot-py-10;
+    panel(10,py,pw,ph,'Record della pista');num(tk&&tk.record?fmt(tk.record):'--',10+pw/2,py+ph/2+2,30,tk&&tk.record?C.gainTxt:C.faint,'center',700);
+    panel(18+pw,py,pw,ph,'Giro minimo');num(saved.minLap+' s',18+pw*1.5,py+ph/2+2,30,C.fg,'center',700)}
+  else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs;
+    const py=top+16,ph=104;panel(10,py,W-20,ph,'Miglior giro',`giro ${lt.bestNo}`);
+    num(fmt(lt.bestMs),W/2,py+ph/2+(rec?-6:2),rec?70:80,C.gainTxt,'center',700,W-60);
+    if(rec){txt('Record della pista',W/2-6,py+ph-14,12,C.dim,'right',600);num(fmt(tk.record),W/2+2,py+ph-14,15,C.fg,'left',700)}
+    const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg]];
+    const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-16)/3;
+    cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8);panel(x,cy,pw,chh,l,null,C.line);num(v,x+pw/2,cy+chh/2+2,28,c,'center',700,pw-16)})}
+  tabBar()}
+
+// ---------- gara ----------
+function deltaTrend(){const Hh=dev.dHist||[];if(Hh.length<2)return 0;const a=Hh[0],b=Hh[Hh.length-1];return b[0]-a[0]>1200?(b[1]-a[1])/((b[0]-a[0])/1000):0}
+// barra LED: 10 segmenti, ognuno un decimo; a sinistra verde (guadagno), a destra rosso (perdita)
+function ledBar(y,d,valid){const n=10,gap=3,sw=(W-16-gap*(n-1))/n,lit=valid?Math.min(5,Math.round(Math.abs(d)/0.1)):0;
+  for(let i=0;i<n;i++){const x=8+i*(sw+gap),left=i<5,dist=left?4-i:i-5,on=valid&&dist<lit&&((d<0&&left)||(d>0&&!left));
+    rr(x,y,sw,8,2,on?(left?C.gain:C.loss):C.off)}}
+function bottomCells(y){const three=W>=400&&lt.deltaValid,cells=[['Ultimo',fmt(lt.lastMs),C.fg]];
+  if(three)cells.push(['Previsto',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),lt.delta<0?C.gainTxt:C.lossTxt]);
+  cells.push(['Migliore',fmt(lt.bestMs),C.gainTxt]);
+  const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
+  cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
+    panel(x,py,pw,ph,l,null,fl?C.accent:C.line);num(v,x+pw/2,py+ph/2+2,28,fl?C.accentTxt:c,'center',700,pw-16)})}
 function drawRace(){
   const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
-  topBar(saved.showSpeed?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`GIRO ${n+(lt.inLap?1:0)}`:'');
+  statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'');
   if(now()<dev.flashUntil&&n){
-    cx.fillStyle='#0a7a35';cx.fillRect(0,26,W,H-26);
-    fit(dev.trackRec?'RECORD DELLA PISTA!':'MIGLIOR GIRO DELLA SESSIONE',W/2,52,24,'#fff',W-20,800);fit(fmt(lt.lastMs),W/2,120,104,'#fff',W-20,800);
-    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)fit(sgn((lt.lastMs-ref)/1000)+(dev.trackRec?' sul vecchio record':' sul migliore'),W/2,186,24,'#b9ffd2',W-20,700);
-    hits.push({id:'flash',x:0,y:26,w:W,h:H-26,act:()=>dev.flashUntil=0});return}
-  const top=lost?56:26;
-  if(lost){cx.fillStyle='#3a0d0b';cx.fillRect(0,26,W,30);fit('GPS PERSO · tempi sospesi',W/2,41,18,'#ffb3ae',W-20,700)}
-  if(!lt.line){txt('NESSUN TRAGUARDO',W/2,110,30,C.accent,'center',800);txt('fermati per impostarlo',W/2,146,18,C.dim,'center',600);return}
-  if(!lt.inLap){txt('PASSA SUL',W/2,98,40,C.accent,'center',800);txt('TRAGUARDO',W/2,140,40,C.accent,'center',800);return}
-  const view=saved.view,mid=(top+192)/2;
-  if(view===0&&lt.deltaValid){
-    const d=lt.delta,k=Math.min(1,Math.abs(d)/0.6);
-    cx.fillStyle=d<0?mix('#06240f','#0c9442',0.25+0.75*k):mix('#2b0806','#c8241b',0.25+0.75*k);cx.fillRect(0,top,W,192-top);
-    txt('DELTA',10,top+12,13,'rgba(255,255,255,.8)','left',700);
-    txt(W<400?'prev. '+fmt(Math.max(0,lt.bestMs+d*1000)):fmt(tNow,true).replace(/(\.\d)\d$/,'$1'),W/2,top+12,15,'rgba(255,255,255,.85)','center',700);
-    const tr=deltaTrend();if(Math.abs(tr)>0.04)txt(tr<0?'IN RECUPERO':'IN PERDITA',W-10,top+12,13,'#fff','right',800);
-    fit(sgn(d),W/2,mid-6,112,'#fff',W-24,800);
-    const by=176,half=W/2-24,bw=Math.min(half,Math.abs(d)*half);
-    cx.fillStyle='rgba(0,0,0,.35)';cx.fillRect(24,by,W-48,8);cx.fillStyle='#fff';cx.fillRect(d<0?W/2-bw:W/2,by,bw,8);cx.fillRect(W/2-1,by-4,2,16);
+    cx.fillStyle=C.gainDeep;cx.fillRect(0,SB,W,H-SB);
+    txt(dev.trackRec?'Record della pista':'Miglior giro',W/2,SB+26,20,'#ffffff','center',700);
+    num(fmt(lt.lastMs),W/2,SB+100,116,'#ffffff','center',700,W-24);
+    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(sgn((lt.lastMs-ref)/1000),W/2,SB+178,28,'#c8ffd9','center',700);
+    hits.push({id:'flash',x:0,y:SB,w:W,h:H-SB,act:()=>dev.flashUntil=0});return}
+  let top=SB;
+  if(lost){cx.fillStyle=C.lossDeep;cx.fillRect(0,SB,W,24);fitT('GPS perso: tempi sospesi finché torna il segnale',W/2,SB+12,13,'#ffffff',W-20,'center',700);top+=24}
+  if(!lt.line){icon('flag',W/2,top+56,28,C.accentTxt);txt('Nessun traguardo',W/2,top+92,24,C.fg,'center',700);txt('Fermati per impostarlo',W/2,top+116,14,C.dim,'center',500);return}
+  if(!lt.inLap){icon('arrowR',W/2,top+60,34,C.accentTxt);txt('Passa sul traguardo',W/2,top+100,28,C.fg,'center',700);txt('Il giro parte appena lo attraversi',W/2,top+126,14,C.dim,'center',500);return}
+  const view=saved.view,cellsY=184,valid=lt.deltaValid,d=lt.delta,dc=d<0?C.gainTxt:C.lossTxt;
+  ledBar(top+6,d,valid);
+  const py=top+28,ph=cellsY-py,mid=py+ph/2+4;
+  if(view===0&&valid){
+    const tr=deltaTrend();
+    panel(8,py,W-16,ph,'Delta',Math.abs(tr)>0.04?(tr<0?'In recupero':'In perdita'):null,C.frame);
+    num(sgn(d),W/2,mid,lost?96:112,dc,'center',700,W-40);
+    num(fmt1(tNow),W-24,py+ph-14,15,C.dim,'right',600);
   }else{
-    cx.fillStyle=C.bg;cx.fillRect(0,top,W,192-top);
-    fit(lt.deltaValid?'TEMPO GIRO':`GIRO ${n+1} · primo riferimento`,W/2,top+12,14,C.dim,W-60,600);
-    fit(fmt(tNow,true).replace(/(\.\d)\d$/,'$1'),W/2,mid-4,112,C.fg,W-16,800);
-    if(lt.deltaValid)txt(sgn(lt.delta),W/2,176,26,lt.delta<0?C.green:C.red,'center',800)}
-  bottomCells();
-  for(let i=0;i<2;i++){cx.beginPath();cx.arc(W-22+i*10,top+28,3,0,7);cx.fillStyle=(view===0&&lt.deltaValid)?(i===view?'#fff':'rgba(255,255,255,.3)'):(i===view?C.fg:C.off);cx.fill()}
-  hits.push({id:'view',x:0,y:26,w:W,h:H-26,act:()=>{saved.view=1-saved.view;persist()}})}
+    panel(8,py,W-16,ph,valid?'Tempo giro':`Giro ${n+1}: fa da riferimento`,null,C.frame);
+    num(fmt1(tNow),W/2,mid-(valid?8:0),lost?92:104,C.fg,'center',700,W-40);
+    if(valid)num(sgn(d),W/2,py+ph-16,22,dc,'center',700)}
+  bottomCells(cellsY);
+  for(let i=0;i<2;i++){cx.beginPath();cx.arc(24+i*9,py+ph-14,2.5,0,7);cx.fillStyle=i===view?C.accentTxt:C.off;cx.fill()}
+  hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}
 
-function drawLaps(){topBar('','');const L=lt.laps,n=L.length;
-  txt(n?(n===1?'1 giro':`${n} giri`):'Giri',12,46,26,C.fg,'left',800);
-  if(n){const avg=L.reduce((a,b)=>a+b,0)/n;txt(`media ${fmt(avg)}`,12,66,14,C.dim,'left',600)}
-  button('close',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
-  const rows=5,top=80,rh=22,max=Math.max(0,n-rows);dev.scroll=Math.min(dev.scroll,max);
-  if(!n)fit('Ancora nessun giro: vai in pista!',W/2,130,18,C.dim,W-20,600);
-  const worst=Math.max(...L,1),bestMs=lt.bestMs;
-  for(let r=0;r<rows&&r+dev.scroll<n;r++){const i=n-1-(r+dev.scroll),ms=L[i],y=top+r*rh,isB=i+1===lt.bestNo;
-    if(isB){cx.fillStyle='rgba(31,227,111,.14)';cx.fillRect(8,y,W-16,rh-2)}
-    txt(String(i+1),30,y+rh/2,16,C.dim,'right',600);txt(fmt(ms),40,y+rh/2,20,isB?C.green:C.fg,'left',700);
-    const bw=Math.max(4,(ms-bestMs*0.98)/(worst-bestMs*0.98+1)*90);cx.fillStyle=isB?C.green:C.chart;cx.fillRect(120,y+8,bw,6);
-    txt(isB?'MIGLIORE':sgn((ms-bestMs)/1000),W-14,y+rh/2,16,isB?C.green:C.redTxt,'right',600)}
-  const bw=(W-28-24)/4;
-  button('up',14,190,bw,44,'▲',{act:()=>dev.scroll=Math.max(0,dev.scroll-rows),disabled:dev.scroll===0,size:24});
-  button('dn',14+bw+8,190,bw,44,'▼',{act:()=>dev.scroll=Math.min(max,dev.scroll+rows),disabled:dev.scroll>=max,size:24});
-  button('share',14+2*(bw+8),190,bw,44,'CONDIVIDI',{act:shareLaps,size:18});
-  button('reset',14+3*(bw+8),190,bw,44,'AZZERA',{act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')},size:18})}
+// ---------- giri ----------
+function drawLaps(){statusBar('','');const L=lt.laps,n=L.length;
+  header(n?(n===1?'1 giro':`${n} giri`):'Giri',()=>dev.screen='ready',n?`media ${fmt(L.reduce((a,b)=>a+b,0)/n)}`:'');
+  const rows=5,top=SB+44,rh=25,max=Math.max(0,n-rows);dev.scroll=Math.min(dev.scroll,max);
+  if(!n){icon('laps',W/2,top+38,24,C.faint);txt('Ancora nessun giro',W/2,top+66,16,C.dim,'center',600)}
+  const worst=Math.max(...L,1),bestMs=lt.bestMs,barX=W*0.36,barW=W*0.3;
+  for(let r=0;r<rows&&r+dev.scroll<n;r++){const i=n-1-(r+dev.scroll),ms=L[i],y=top+r*rh,isB=i+1===lt.bestNo,cy=y+rh/2;
+    if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,rh)}
+    num(String(i+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,20,isB?C.gainTxt:C.fg,'left',700);
+    if(i===n-1&&!isB)txt('Ultimo',W*0.42,cy,12,C.dim,'left',600);
+    if(isB)txt('Migliore',W-12,cy,13,C.gainTxt,'right',700);else num(sgn((ms-bestMs)/1000),W-12,cy,16,C.lossTxt,'right',600);
+    hline(12,y+rh,W-24,C.line)}
+  const y=H-46,bw=(W-16-18)/4;
+  button('up',8,y,bw,40,'',{icon:'up',act:()=>dev.scroll=Math.max(0,dev.scroll-rows),disabled:dev.scroll===0});
+  button('dn',8+(bw+6),y,bw,40,'',{icon:'down',act:()=>dev.scroll=Math.min(max,dev.scroll+rows),disabled:dev.scroll>=max});
+  button('share',8+2*(bw+6),y,bw,40,'Condividi',{icon:'share',act:shareLaps,size:15});
+  button('reset',8+3*(bw+6),y,bw,40,'Azzera',{icon:'trash',act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')},size:15})}
 
+// ---------- procedura traguardo ----------
 function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
-function drawWizard(){topBar('TRAGUARDO','');
-  if(dev.wiz===1){const moving=dev.speed>5,prec=dev.hAcc;
-    fit('1 · Fermati sulla linea',W/2,52,28,C.fg,W-20,800);fit('del traguardo, nel senso di marcia',W/2,80,18,C.dim,W-20,600);
-    txt(`Precisione GPS ${dev.fix?'±'+Math.round(prec)+' m':'--'}`,W/2,112,20,prec<6?C.green:C.accent,'center',700);
-    if(moving)txt('Sei in movimento: fermati',W/2,138,18,C.red,'center',700);
-    button('wcancel',14,170,100,58,'ANNULLA',{act:()=>dev.screen='ready',size:20});
-    button('wok',122,170,W-136,58,'SONO SULLA LINEA',{primary:true,size:24,disabled:moving||!dev.fix,act:()=>{dev.pend={lat:dev.gps.lat,lon:dev.gps.lon};dev.wiz=2}})}
-  else if(dev.wiz===2){fit('2 · Ora parti in avanti',W/2,56,30,C.fg,W-20,800);
-    const a=(now()/600)%1,x=40+a*(W-150);cx.fillStyle=C.yellow;cx.beginPath();cx.moveTo(x,112);cx.lineTo(x+40,112);cx.lineTo(x+40,98);cx.lineTo(x+70,124);cx.lineTo(x+40,150);cx.lineTo(x+40,136);cx.lineTo(x,136);cx.closePath();cx.fill();
-    fit('la direzione di marcia la prendo da solo',W/2,170,16,C.dim,W-20,600);
-    button('wcancel2',W/2-60,190,120,42,'ANNULLA',{act:()=>{dev.screen='ready';dev.wiz=0},size:18})}
-  else{cx.strokeStyle=C.green;cx.lineWidth=9;cx.lineCap='round';cx.beginPath();cx.moveTo(130,84);cx.lineTo(152,106);cx.lineTo(194,62);cx.stroke();
-    fit(dev.wizNew?'PISTA SALVATA':'TRAGUARDO AGGIORNATO',W/2,138,30,C.green,W-20,800);fit(dev.wizNew?`${trackName()} · puoi darle un nome da PISTE`:`${trackName()} · nome e record restano`,W/2,168,15,C.dim,W-20,600)}}
+function drawWizard(){statusBar('','');
+  header('Imposta traguardo',()=>{dev.screen='ready';dev.wiz=0},dev.wiz<3?`passo ${dev.wiz} di 2`:'');
+  const top=SB+44;
+  if(dev.wiz===1){const moving=dev.speed>5,prec=dev.hAcc,ok=dev.fix&&prec<6;
+    txt('Fermati sulla linea del traguardo',16,top+26,22,C.fg,'left',700);
+    txt('Con la moto rivolta nel senso di marcia',16,top+50,14,C.dim,'left',500);
+    txt('Precisione GPS',16,top+78,13,C.dim,'left',600);num(dev.fix?`±${Math.round(prec)} m`:'--',120,top+78,18,ok?C.gainTxt:C.accentTxt,'left',700);
+    if(moving)txt('Sei in movimento: fermati',W-16,top+78,14,C.lossTxt,'right',700);
+    button('wcancel',16,H-54,110,44,'Annulla',{act:()=>dev.screen='ready',size:16});
+    button('wok',136,H-54,W-152,44,'Sono sulla linea',{primary:true,icon:'check',size:17,disabled:moving||!dev.fix,act:()=>{dev.pend={lat:dev.gps.lat,lon:dev.gps.lon};dev.wiz=2}})}
+  else if(dev.wiz===2){txt('Ora parti in avanti',16,top+26,22,C.fg,'left',700);
+    txt('Dopo 8 metri prendo la direzione di marcia da solo',16,top+50,14,C.dim,'left',500);
+    const a=(now()/700)%1;for(let i=0;i<3;i++){const x=40+((a+i/3)%1)*(W-110);icon('arrowR',x,top+100,30,C.accentTxt)}
+    button('wcancel2',16,H-54,110,44,'Annulla',{act:()=>{dev.screen='ready';dev.wiz=0},size:16})}
+  else{icon('check',W/2,top+46,40,C.gainTxt);txt(dev.wizNew?'Pista salvata':'Traguardo aggiornato',W/2,top+92,24,C.fg,'center',700);
+    txt(dev.wizNew?`${trackName()}: puoi rinominarla da Piste`:`${trackName()}: nome e record restano`,W/2,top+118,14,C.dim,'center',500)}}
 
+// ---------- piste ----------
 function openTracks(){dev.screen='tracks';dev.tsel=dev.track>=0?dev.track:(saved.tracks.length?0:-1);dev.tscroll=Math.max(0,dev.tsel-3)}
 function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i].name;r.style.display='flex';setTimeout(()=>{inp.focus();inp.select()},50);
   const close=()=>{r.style.display='none';inp.blur()};
   $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
   $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
-function drawTracks(){topBar('','');const T=saved.tracks,n=T.length;
-  txt('Piste',12,42,24,C.fg,'left',800);txt(n?`${n} salvate`:'',80,44,14,C.dim,'left',600);
-  button('tclose',W-96,30,84,32,'CHIUDI',{act:()=>dev.screen='ready',size:18});
-  const rows=4,top=68,rh=29,max=Math.max(0,n-rows);dev.tscroll=Math.min(dev.tscroll||0,max);
-  if(!n)fit('Nessuna pista: imposta un traguardo per crearne una',W/2,120,17,C.dim,W-20,600);
-  const lw=W-14-(n>rows?52:14);
-  for(let r=0;r<rows&&r+dev.tscroll<n;r++){const i=r+dev.tscroll,t=T[i],y=top+r*rh,sel=i===dev.tsel,act=i===dev.track;
-    rr(14,y,lw-14,rh-4,6,sel?'rgba(255,210,26,.18)':C.panel,sel?C.yellow:null);
+function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
+  header('Piste',()=>dev.screen='ready',n?(n===1?'1 salvata':`${n} salvate`):'');
+  const rows=4,top=SB+44,rh=29,max=Math.max(0,n-rows);dev.tscroll=Math.min(dev.tscroll||0,max);
+  if(!n){icon('pin',W/2,top+36,24,C.faint);txt('Nessuna pista: imposta un traguardo per crearne una',W/2,top+66,14,C.dim,'center',500)}
+  const scrollW=n>rows?44:0,colRec=W-scrollW-110,colDist=W-scrollW-14;
+  for(let r=0;r<rows&&r+dev.tscroll<n;r++){const i=r+dev.tscroll,t=T[i],y=top+r*rh,sel=i===dev.tsel,act=i===dev.track,cy=y+rh/2;
+    if(sel){cx.fillStyle=C.selWash;cx.fillRect(0,y,W-scrollW,rh);cx.fillStyle=C.accent;cx.fillRect(0,y+3,3,rh-6)}
     const dist=dev.gps&&dev.gps.lat?hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon):null;
-    const info=[t.record?'record '+fmt(t.record):'nessun record',dist==null?'':dist<1000?`a ${Math.round(dist)} m`:`a ${(dist/1000).toFixed(dist<10000?1:0)} km`].filter(Boolean).join(' · ');
-    cx.font=F(14,600);const iw=cx.measureText(info).width;txt(info,lw-8,y+(rh-4)/2,14,act?C.accent:C.dim,'right',600);
-    let fs=19;cx.font=F(fs,800);while(cx.measureText(t.name).width>lw-40-iw&&fs>12){fs--;cx.font=F(fs,800)}
-    let nm=t.name;while(cx.measureText(nm).width>lw-40-iw&&nm.length>3)nm=nm.slice(0,-2)+'…';
-    txt(nm,24,y+(rh-4)/2,fs,act?C.accent:C.fg,'left',800);
-    hits.push({id:'trow'+i,x:14,y,w:lw-14,h:rh-4,act:()=>dev.tsel=i})}
-  if(n>rows){button('tup',W-46,top,34,rows*rh/2-4,'▲',{act:()=>dev.tscroll=Math.max(0,dev.tscroll-1),disabled:dev.tscroll===0,size:18});
-    button('tdn',W-46,top+rows*rh/2,34,rows*rh/2-4,'▼',{act:()=>dev.tscroll=Math.min(max,dev.tscroll+1),disabled:dev.tscroll>=max,size:18})}
-  const ok=dev.tsel>=0&&dev.tsel<n,bw=(W-28-24)/4;
-  button('tuse',14,190,bw,44,'USA',{primary:ok,disabled:!ok,size:22,act:()=>{if(lt.laps.length&&dev.tsel!==dev.track){dev.screen='confirmSwitch';return}useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')}});
-  button('tren',14+(bw+8),190,bw,44,'RINOMINA',{disabled:!ok,size:18,act:()=>openRename(dev.tsel)});
-  button('tdel',14+2*(bw+8),190,bw,44,'CANCELLA',{disabled:!ok,size:18,act:()=>dev.screen='confirmDel'});
-  button('tnew',14+3*(bw+8),190,bw,44,'NUOVA',{size:20,act:startWizard})}
+    const ds=dist==null?'':dist<1000?`${Math.round(dist)} m`:`${(dist/1000).toFixed(dist<10000?1:0)} km`;
+    num(t.record?fmt(t.record):'--',colRec,cy,17,t.record?C.gainTxt:C.faint,'right',700);
+    txt(ds,colDist,cy,13,C.dim,'right',500);
+    const maxName=colRec-90-14;let nm=t.name;cx.font=FL(16,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
+    txt(nm,14,cy,16,C.fg,'left',700);if(act){const w=cx.measureText(nm).width;rr(20+w,cy-7,44,14,3,null,C.accentTxt);txt('In uso',42+w,cy+0.5,10,C.accentTxt,'center',700)}
+    hline(12,y+rh,W-scrollW-24,C.line);hits.push({id:'trow'+i,x:0,y,w:W-scrollW,h:rh,act:()=>dev.tsel=i})}
+  if(n>rows){button('tup',W-40,top+2,34,rows*rh/2-6,'',{icon:'up',act:()=>dev.tscroll=Math.max(0,dev.tscroll-1),disabled:dev.tscroll===0});
+    button('tdn',W-40,top+rows*rh/2+2,34,rows*rh/2-6,'',{icon:'down',act:()=>dev.tscroll=Math.min(max,dev.tscroll+1),disabled:dev.tscroll>=max})}
+  const ok=dev.tsel>=0&&dev.tsel<n,y=H-46,bw=(W-16-18)/4;
+  button('tuse',8,y,bw,40,'Usa',{primary:ok,disabled:!ok,icon:'check',size:16,act:()=>{if(lt.laps.length&&dev.tsel!==dev.track){dev.screen='confirmSwitch';return}useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')}});
+  button('tren',8+(bw+6),y,bw,40,'Rinomina',{disabled:!ok,icon:'edit',size:15,act:()=>openRename(dev.tsel)});
+  button('tdel',8+2*(bw+6),y,bw,40,'Cancella',{disabled:!ok,icon:'trash',size:15,act:()=>dev.screen='confirmDel'});
+  button('tnew',8+3*(bw+6),y,bw,40,'Nuova',{icon:'plus',size:15,act:startWizard})}
 
-function drawConfirm(title,sub,yesLbl,act,back='ready'){topBar('','');
-  fit(title,W/2,66,30,C.fg,W-20,800);fit(sub,W/2,102,17,C.dim,W-20,600);
-  button('no',14,160,(W-36)/2,64,'NO',{act:()=>dev.screen=back,size:28});
-  button('yes',22+(W-36)/2,160,(W-36)/2,64,yesLbl,{danger:true,act,size:24})}
+// ---------- conferme ----------
+function drawConfirm(title,sub,yesLbl,act,back='ready'){statusBar('','');
+  fitT(title,W/2,SB+56,26,C.fg,W-30,'center',700);fitT(sub,W/2,SB+86,14,C.dim,W-30,'center',500);
+  const bw=Math.min(180,(W-44)/2);
+  button('no',W/2-bw-6,H-70,bw,52,'Annulla',{act:()=>dev.screen=back,size:18});
+  button('yes',W/2+6,H-70,bw,52,yesLbl,{danger:true,act,size:18})}
 
 function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condividere');return}
-  const lines=[`Flat Track Timer · ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Migliore: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
+  const lines=[`Flat Track Timer, ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Miglior giro: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
   if(navigator.share)navigator.share({title:'Giri',text:lines}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
-function drawSettings(){topBar('','');
-  txt('Opzioni',12,42,24,C.fg,'left',800);txt(VERSION,W-104,46,12,C.faint,'right',600);button('sclose',W-96,30,84,32,'CHIUDI',{act:()=>dev.screen='ready',size:18});
-  const seg=(y,lbl,opts,cur,set)=>{txt(lbl,14,y+15,18,C.fg,'left',600);opts.forEach(([l,v],k)=>button('s'+y+k,130+k*92,y,88,30,l,{primary:cur===v,size:17,act:()=>set(v)}))};
-  seg(66,'GPS',[['TELEFONO','phone'],['DEMO','demo']],saved.source,v=>{if(saved.source!==v){setSource(v);resize()}});
-  txt('Giro minimo',14,116,18,C.fg,'left',600);
-  button('dmin',130,101,48,30,'−',{act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()},size:24});
-  txt(saved.minLap+' s',(178+W-62)/2,116,19,C.accent);
-  button('imin',W-62,101,48,30,'+',{act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()},size:24});
-  seg(136,'Vista in gara',[['DELTA',0],['TEMPO',1]],saved.view,v=>{saved.view=v;persist()});
-  seg(171,'Velocità',[['NO',false],['SÌ',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
-  txt('Schermo',14,221,18,C.fg,'left',600);
-  const tw=Math.min(88,(W-144)/3-4),mode=saved.theme||'auto';
-  [['AUTO','auto'],['GIORNO','giorno'],['SERA','sera']].forEach(([l,v],k)=>button('th'+k,130+k*(tw+4),206,tw,30,l,{primary:mode===v,size:16,act:()=>{saved.theme=v;dayCache.t=0;persist()}}));
-  if(mode==='auto')txt(isDay()?'ora: giorno':'ora: sera',130+3*(tw+4)+4,221,13,C.dim,'left',600)}
+// ---------- opzioni ----------
+function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
+  const top=SB+42,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw;
+  const row=(i,lbl,hint)=>{const y=top+i*rh;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);if(i<4)hline(12,y+rh,W-24,C.line);return y+4};
+  let y=row(0,'GPS');segmented('sgps',cx0,y,cw,rh-8,[['Telefono','phone'],['Demo','demo']],saved.source,v=>{if(saved.source!==v){setSource(v);resize()}});
+  y=row(1,'Giro minimo','sotto, il passaggio viene ignorato');
+  button('dmin',cx0,y,44,rh-8,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()}});
+  num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
+  button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()}});
+  y=row(2,'Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
+  y=row(3,'Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
+  y=row(4,'Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
+  segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()})}
 
+// ---------- disegno complessivo ----------
 function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
   const s=dev.screen;
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
   else if(s==='wizard')drawWizard();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();
-  else if(s==='confirmReset')drawConfirm('Nuova sessione?',`I ${lt.laps.length} giri vengono cancellati`,'SÌ, AZZERA',()=>{lt.resetSession();saveSession();dev.screen='ready';toast('Sessione azzerata')});
-  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri di questa sessione vengono azzerati`,'SÌ, CAMBIA',()=>{lt.resetSession();saveSession();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
-  else if(s==='confirmDel'){const t=saved.tracks[dev.tsel];drawConfirm('Cancellare la pista?',t?`${t.name}${t.record?' · record '+fmt(t.record):''}`:'','CANCELLA',()=>{const i=dev.tsel;saved.tracks.splice(i,1);persist();
+  else if(s==='confirmReset')drawConfirm('Azzerare la sessione?',`${lt.laps.length===1?'Il giro viene cancellato':'I '+lt.laps.length+' giri vengono cancellati'} dal telefono`,'Azzera',()=>{lt.resetSession();saveSession();dev.screen='ready';toast('Sessione azzerata')});
+  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri di questa sessione vengono azzerati`,'Cambia pista',()=>{lt.resetSession();saveSession();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
+  else if(s==='confirmDel'){const t=saved.tracks[dev.tsel];drawConfirm(`Cancellare ${t?t.name:'la pista'}?`,t&&t.record?`Si perde anche il record (${fmt(t.record)})`:'Il traguardo salvato viene eliminato','Cancella',()=>{const i=dev.tsel;saved.tracks.splice(i,1);persist();
     if(i===dev.track){lt.clearLine();dev.track=-1}else if(i<dev.track)dev.track--;dev.tsel=Math.min(i,saved.tracks.length-1);dev.screen='tracks';toast('Pista cancellata')},'tracks')}
-  if(dev.toast&&now()<dev.toastUntil){cx.font=F(18);const w=cx.measureText(dev.toast).width+28;rr((W-w)/2,30,w,30,15,'rgba(255,210,26,.97)');txt(dev.toast,W/2,45,18,'#111')}}
+  if(dev.toast&&now()<dev.toastUntil){cx.font=FL(15,700);const w=cx.measureText(dev.toast).width+32;rr((W-w)/2,SB+6,w,28,6,C.bg,C.accent,1.5);txt(dev.toast,W/2,SB+20.5,15,C.accentTxt,'center',700)}}
 
 function autoScreens(){const s=dev.screen;
   if(dev.lastT&&now()-dev.lastPerf>4000)dev.fix=false;     // nessun punto GPS da 4 s
   if(s==='boot'&&dev.fix)dev.screen=dev.speed>15?'race':'ready';
-  if(['ready','laps','settings'].includes(s)&&dev.speed>15&&dev.fix)dev.screen='race';
+  if(['ready','laps','settings','tracks'].includes(s)&&dev.speed>15&&dev.fix)dev.screen='race';
   if(s==='race'){if(dev.fix&&dev.speed<3){if(dev.stillSince==null)dev.stillSince=now();else if(now()-dev.stillSince>3000){dev.screen='ready';dev.stillSince=null}}else dev.stillSince=null}
   if(s==='wizard'&&dev.wiz===3&&now()-dev.wizDoneAt>2500)dev.screen=dev.speed>15?'race':'ready'}
 
