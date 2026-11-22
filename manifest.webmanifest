@@ -2,7 +2,7 @@
   "name": "Flat Track Timer",
   "short_name": "FT Timer",
   "description": "Cronometro GPS per flat track",
-  "start_url": "./index.html",
+  "start_url": "./index.html?app=1",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",

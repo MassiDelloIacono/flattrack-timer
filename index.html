@@ -22,6 +22,7 @@ canvas{display:block;background:#000;touch-action:none}
 </style>
 </head>
 <body>
+<div id="loading" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#ffd21a;font:700 22px sans-serif;text-align:center;padding:20px">Flat Track Timer<br>caricamento…<br><small style="color:#888;font-size:15px">se resta così, chiudi e riapri con internet</small></div>
 <div id="app">
   <canvas id="scr" aria-label="Cronometro"></canvas>
   <div id="demo">
@@ -68,7 +69,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
+const VERSION='v3';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 
@@ -163,7 +164,8 @@ async function goFull(){if(triedFull)return;triedFull=true;try{await document.do
 const cv=$('scr'),cx=cv.getContext('2d');
 const W=320,H=240,C={bg:'#000',fg:'#fff',dim:'#8c8c8c',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
 let scale=1;
-function resize(){const demoOn=$('demo').classList.contains('on'),vw=innerWidth-(demoOn&&innerWidth>innerHeight?140:0),vh=innerHeight-(demoOn&&innerWidth<=innerHeight?150:0);
+let lastVW=0,lastVH=0;
+function resize(){lastVW=innerWidth;lastVH=innerHeight;if(!innerWidth||!innerHeight)return;const demoOn=$('demo').classList.contains('on'),vw=innerWidth-(demoOn&&innerWidth>innerHeight?140:0),vh=innerHeight-(demoOn&&innerWidth<=innerHeight?150:0);
   const s=Math.min(vw/W,vh/H),dpr=devicePixelRatio||1;cv.style.width=W*s+'px';cv.style.height=H*s+'px';cv.width=Math.round(W*s*dpr);cv.height=Math.round(H*s*dpr);scale=s*dpr}
 addEventListener('resize',resize);document.addEventListener('fullscreenchange',()=>setTimeout(resize,100));screen.orientation&&screen.orientation.addEventListener&&screen.orientation.addEventListener('change',()=>setTimeout(resize,100));
 const F=(s,w=700)=>`${w} ${s}px "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
@@ -194,7 +196,7 @@ function topBar(center,right){
   if(right)txt(right,W-46,13,16,'#fff','right')}
 
 function drawBoot(){topBar('','');
-  txt('FLAT TRACK',W/2,62,40,C.yellow,'center',800);txt('CRONOMETRO GPS',W/2,94,20,'#fff','center',600);
+  txt('FLAT TRACK',W/2,62,40,C.yellow,'center',800);txt('CRONOMETRO GPS',W/2,94,20,'#fff','center',600);txt(VERSION,W-6,H-8,11,'#555','right',600);
   if(dev.geoErr){fit(dev.geoErr,W/2,132,20,C.red,W-20,700);
     button('demo1',60,160,W-120,56,'PROVA IN DEMO',{primary:true,act:()=>setSource('demo'),sub:'moto virtuale su un ovale'})}
   else{const p=dev.lastT?Math.max(0.15,Math.min(1,25/dev.hAcc)):((now()-dev.startedAt)/600%1);rr(70,130,180,12,6,'#222');rr(70,130,Math.max(12,180*p),12,6,C.green);
@@ -283,7 +285,7 @@ function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condivi
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 function drawSettings(){topBar('','');
-  txt('Opzioni',12,46,26,'#fff','left',800);button('sclose',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
+  txt('Opzioni',12,46,26,'#fff','left',800);txt(VERSION,82,48,12,'#555','left',600);button('sclose',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
   txt('GPS',14,98,19,'#fff','left',600);
   [['TELEFONO','phone'],['DEMO','demo']].forEach(([l,v],i)=>button('src'+i,130+i*92,78,88,40,l,{primary:saved.source===v,size:19,act:()=>{if(saved.source!==v){setSource(v);resize()}}}));
   txt('Giro minimo',14,144,19,'#fff','left',600);
@@ -324,13 +326,17 @@ resize();
 if(saved.source==='demo'){}else startPhoneGps();
 let last=performance.now();
 function loop(t){let dt=Math.min(200,t-last);last=t;
+  if(innerWidth!==lastVW||innerHeight!==lastVH||!cv.width)resize();
+  const ld=document.getElementById('loading');if(ld&&cv.width)ld.remove();
   try{if(saved.source==='demo')while(dt>0){const d=Math.min(5,dt);demoStep(d);dt-=d}}catch(e){window.__errs.push(String(e&&e.message||e))}
   try{autoScreens();render()}catch(e){window.__errs.push(String(e&&e.message||e))}
   if(window.__errs.length){cx.setTransform(scale,0,0,scale,0,0);cx.fillStyle='rgba(120,0,0,.9)';cx.fillRect(0,H-40,W,40);cx.fillStyle='#fff';cx.font='12px sans-serif';cx.textAlign='left';cx.textBaseline='top';
     cx.fillText('ERRORE: '+window.__errs[window.__errs.length-1].slice(0,60),6,H-36);cx.fillText(navigator.userAgent.replace(/.*Chrome\/(\d+).*/,'Chrome $1'),6,H-20)}
   requestAnimationFrame(loop)}
 requestAnimationFrame(loop);
-if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol==='https:'){let had=!!navigator.serviceWorker.controller,reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!reloaded){reloaded=true;location.reload()}});
+  navigator.serviceWorker.register('sw.js').then(r=>r.update()).catch(()=>{})}
 window.__ftt={dev,lt,demo,saved,get hits(){return hits},setSource,onGeo};
 }
 </script>
