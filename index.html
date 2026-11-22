@@ -11,7 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Barlow Condensed","Roboto Condensed",sans-serif}
-#app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#app{position:fixed;inset:0;display:flex;align-items:stretch;justify-content:center;gap:0;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#stage{flex:1 1 auto;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 canvas{display:block;background:#000;touch-action:none}
 #demo{display:none;flex-direction:column;gap:8px;align-items:stretch;width:92px;padding:6px;box-sizing:border-box;align-self:stretch;justify-content:center;background:#0b0b0b}
 #demo.on{display:flex}
@@ -24,7 +25,7 @@ canvas{display:block;background:#000;touch-action:none}
 <body>
 <div id="loading" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#ffd21a;font:700 22px sans-serif;text-align:center;padding:20px">Flat Track Timer<br>caricamento…<br><small style="color:#888;font-size:15px">se resta così, chiudi e riapri con internet</small></div>
 <div id="app">
-  <canvas id="scr" aria-label="Cronometro"></canvas>
+  <div id="stage"><canvas id="scr" aria-label="Cronometro"></canvas></div>
   <div id="demo">
     <small>DEMO</small>
     <button id="dGo" class="go">PARTI</button>
@@ -69,7 +70,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v6';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
+const VERSION='v7';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 
@@ -166,9 +167,9 @@ const cv=$('scr'),cx=cv.getContext('2d');
 let W=320;const H=240,C={bg:'#000',fg:'#fff',dim:'#8c8c8c',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
 let scale=1;
 let lastVW=0,lastVH=0;
-function resize(){lastVW=innerWidth;lastVH=innerHeight;if(!innerWidth||!innerHeight)return;
-  const land=innerWidth>innerHeight,demoOn=$('demo').classList.contains('on'),dpr=devicePixelRatio||1;
-  const vw=innerWidth-(demoOn&&land?$('demo').offsetWidth:0),vh=innerHeight-(demoOn&&!land?$('demo').offsetHeight:0);
+const stage=$('stage');
+function resize(){lastVW=stage.clientWidth;lastVH=stage.clientHeight;const vw=lastVW,vh=lastVH;if(!vw||!vh)return;
+  const dpr=devicePixelRatio||1;
   let cw,ch;
   if(vw/vh>=320/240){ch=vh;cw=vw;W=Math.round(240*cw/ch)}      // orizzontale: riempie tutto lo schermo
   else{W=320;cw=vw;ch=vw*240/320}                                  // verticale: tutta la larghezza
@@ -331,7 +332,7 @@ resize();
 if(saved.source==='demo'){}else startPhoneGps();
 let last=performance.now();
 function loop(t){let dt=Math.min(200,t-last);last=t;
-  if(innerWidth!==lastVW||innerHeight!==lastVH||!cv.width)resize();
+  if(stage.clientWidth!==lastVW||stage.clientHeight!==lastVH||!cv.width)resize();
   const ld=document.getElementById('loading');if(ld&&cv.width)ld.remove();
   try{if(saved.source==='demo')while(dt>0){const d=Math.min(5,dt);demoStep(d);dt-=d}}catch(e){window.__errs.push(String(e&&e.message||e))}
   try{autoScreens();render()}catch(e){window.__errs.push(String(e&&e.message||e))}
