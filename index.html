@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v17';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v18';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -135,12 +135,54 @@ function onFix(f){
 }
 
 let watchId=null;
-function startPhoneGps(){
+function startPhoneGps(){if(watchId!=null)return;
   if(!('geolocation' in navigator)){dev.geoErr='Questo browser non ha il GPS';return}
   if(!window.isSecureContext){dev.geoErr='Apri l\'app dal suo indirizzo https';return}
-  try{watchId=navigator.geolocation.watchPosition(p=>{dev.geoErr=null;const c=p.coords;onGeo(c.latitude,c.longitude,c.accuracy,c.speed,c.heading,p.timestamp)},
+  try{watchId=navigator.geolocation.watchPosition(p=>{dev.geoErr=null;if(ble.on)return;const c=p.coords;onGeo(c.latitude,c.longitude,c.accuracy,c.speed,c.heading,p.timestamp)},
     e=>{dev.geoErr=e.code===1?'Permesso posizione negato':'GPS non disponibile';},{enableHighAccuracy:true,maximumAge:0,timeout:10000})}catch(e){dev.geoErr='GPS non disponibile qui'}}
 function stopPhoneGps(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}}
+
+// ===================== GPS esterno via Bluetooth (ESP32-C3 + u-blox M10, firmware FlatTrackGPS) =====================
+const BLE_SVC='f1a70001-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_POS='f1a70002-5e4b-4c2a-9d6f-7a3c0de0f00d',
+  BLE_CTRL='f1a70003-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_INFO='f1a70004-5e4b-4c2a-9d6f-7a3c0de0f00d';
+const ble={dev:null,pos:null,ctrl:null,info:null,on:false,busy:false,hz:0,n:0,t0:0,off:null,last:-1,sv:0,state:0,devHz:0,fw:0};
+// pacchetto da 20 byte: ora GPS, lat, lon, velocità, direzione, precisione, satelliti, fix
+function decodeBlePos(dv){const f=dv.getUint8(19);return{itow:dv.getUint32(0,true),lat:dv.getInt32(4,true)/1e7,lon:dv.getInt32(8,true)/1e7,
+  spd:dv.getUint16(12,true)/100,hdg:dv.getUint16(14,true)/100,acc:dv.getUint16(16,true)/100,sv:dv.getUint8(18),fix:f&7,ok:!!(f&8)}}
+// ogni punto porta l'ora GPS esatta: la allineo una sola volta all'orologio del telefono, così il ritardo
+// del Bluetooth non entra nei tempi e il passaggio al GPS del telefono (se il Bluetooth cade) resta coerente
+function bleTime(itow){if(ble.off==null)ble.off=Date.now()-itow-60;else if(ble.last>=0&&itow<ble.last-302400000)ble.off+=604800000;ble.last=itow;return itow+ble.off}
+function onBlePos(e){const p=decodeBlePos(e.target.value),n=now();ble.n++;if(n-ble.t0>=1000){ble.hz=Math.round(ble.n*1000/(n-ble.t0));ble.n=0;ble.t0=n}
+  if(saved.source!=='ble')return;
+  const t=bleTime(p.itow);ble.sv=p.sv;
+  if(!(p.ok&&p.fix>=3)){dev.fix=false;dev.hAcc=99;dev.sats=p.sv;dev.lastT=t;dev.lastPerf=n;return}
+  onGeo(p.lat,p.lon,Math.max(0.3,p.acc),p.spd,p.spd>1.5?p.hdg:null,t);dev.sats=p.sv}
+function onBleInfo(e){const d=e.target.value;if(d.byteLength>=6){ble.fw=d.getUint8(0);ble.devHz=d.getUint8(2);ble.state=d.getUint8(3)}}
+async function bleAttach(){const srv=await ble.dev.gatt.connect(),s=await srv.getPrimaryService(BLE_SVC);
+  ble.pos=await s.getCharacteristic(BLE_POS);ble.ctrl=await s.getCharacteristic(BLE_CTRL);
+  try{ble.info=await s.getCharacteristic(BLE_INFO);ble.info.removeEventListener('characteristicvaluechanged',onBleInfo);
+    ble.info.addEventListener('characteristicvaluechanged',onBleInfo);await ble.info.startNotifications()}catch(e){}
+  ble.pos.removeEventListener('characteristicvaluechanged',onBlePos);ble.pos.addEventListener('characteristicvaluechanged',onBlePos);
+  await ble.pos.startNotifications();ble.on=true;ble.t0=now();ble.n=0;stopPhoneGps();
+  try{await ble.ctrl.writeValue(new Uint8Array([saved.extMode==null?1:saved.extMode]))}catch(e){}
+  toast('GPS esterno collegato')}
+// va chiamata da un tocco (il browser apre l'elenco dei dispositivi Bluetooth)
+async function bleConnect(){
+  if(!navigator.bluetooth){toast('Bluetooth non disponibile: usa Chrome su Android');return}
+  if(ble.busy||ble.on)return;ble.busy=true;
+  try{if(!ble.dev){ble.dev=await navigator.bluetooth.requestDevice({filters:[{services:[BLE_SVC]}]});ble.dev.addEventListener('gattserverdisconnected',bleLost)}
+    await bleAttach()}
+  catch(e){toast(e&&e.name==='NotFoundError'?'Nessun GPS scelto':'Collegamento non riuscito')}
+  finally{ble.busy=false}}
+function bleLost(){const was=ble.on;ble.on=false;ble.hz=0;
+  if(saved.source==='ble'){if(was)toast('GPS esterno perso: uso quello del telefono');startPhoneGps();setTimeout(bleRetry,2000)}}
+async function bleRetry(){if(saved.source!=='ble'||ble.on||ble.busy||!ble.dev)return;ble.busy=true;
+  try{await bleAttach()}catch(e){setTimeout(bleRetry,3000)}finally{ble.busy=false}}
+function bleClose(){ble.on=false;try{if(ble.dev&&ble.dev.gatt.connected)ble.dev.gatt.disconnect()}catch(e){}}
+// all'avvio: se il browser ricorda il GPS già autorizzato, mi ricollego senza chiedere nulla
+function bleAuto(){try{if(navigator.bluetooth&&navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(ds=>{
+  const d=ds.find(x=>/FlatTrack/i.test(x.name||''));if(d){ble.dev=d;d.addEventListener('gattserverdisconnected',bleLost);bleRetry()}}).catch(()=>{})}catch(e){}}
+async function setExtMode(m){saved.extMode=m;persist();if(ble.on&&ble.ctrl){try{await ble.ctrl.writeValue(new Uint8Array([m]))}catch(e){}}}
 
 // ===================== demo: moto virtuale su ovale =====================
 const STR=100,RAD=31.83,PER=2*STR+2*Math.PI*RAD,BASE={lat:44.5,lon:11.3};
@@ -166,7 +208,10 @@ function demoStep(dtMs){const vS=26*demo.pace*demo.lapF,vC=18*demo.pace*demo.lap
 const $=id=>document.getElementById(id);
 function toggleDemoPanel(){$('demo').classList.toggle('on');setTimeout(resize,30)}
 function setSource(src){saved.source=src;persist();origin=null;dev.hist=[];lt.clearLine();dev.track=-1;dev.fix=false;dev.lastT=0;
-  if(src==='demo'){stopPhoneGps();$('demo').classList.add('on')}else{$('demo').classList.remove('on');demo.riding=false;startPhoneGps()}setTimeout(resize,30)}
+  if(src==='demo'){stopPhoneGps();bleClose();$('demo').classList.add('on')}
+  else{$('demo').classList.remove('on');demo.riding=false;
+    if(src==='ble'){if(!ble.on)startPhoneGps();bleConnect()}else{bleClose();startPhoneGps()}}
+  setTimeout(resize,30)}
 $('dGo').onclick=()=>{demo.riding=!demo.riding;$('dGo').textContent=demo.riding?'STOP':'PARTI';$('dGo').classList.toggle('go',!demo.riding)};
 $('dFast').onclick=()=>{demo.pace=Math.min(1.15,demo.pace+0.02);$('dPace').textContent='ritmo '+Math.round(demo.pace*100)+'%'};
 $('dSlow').onclick=()=>{demo.pace=Math.max(0.85,demo.pace-0.02);$('dPace').textContent='ritmo '+Math.round(demo.pace*100)+'%'};
@@ -293,6 +338,9 @@ function statusBar(center,lapTxt){
   let lx=32+(cx.measureText(dev.fix?`±${Math.round(dev.hAcc)} m`:'Nessun GPS').width)+10;
   if(saved.source==='demo'){const open=$('demo').classList.contains('on');rr(lx,5,42,15,4,open?C.accent:null,C.accentTxt);txt('Demo',lx+21,12.5,12,open?C.onAccent:C.accentTxt,'center',700);
     hits.push({id:'demoBadge',x:lx-6,y:0,w:56,h:SB+4,act:toggleDemoPanel});lx+=50}
+  if(saved.source==='ble'){const lbl=ble.on?(ble.hz?ble.hz+' Hz':'Esterno'):'Collega GPS',col2=ble.on?C.gainTxt:C.accentTxt;cx.font=FL(12,700);const bw=cx.measureText(lbl).width+12;
+    rr(lx,5,bw,15,4,null,col2);txt(lbl,lx+bw/2,12.5,12,col2,'center',700);
+    if(!ble.on)hits.push({id:'bleBadge',x:lx-6,y:0,w:bw+12,h:SB+4,act:bleConnect});lx+=bw+8}
   if(center)fitT(center,W/2,12,14,C.fg,Math.max(60,W-2*Math.max(lx,110)),'center',700);
   let rx=W-8;
   if(dev.battery!=null){const b=Math.round(dev.battery);rr(rx-22,7,20,10,2,null,C.dim);cx.fillStyle=C.dim;cx.fillRect(rx-2,10,2,4);
@@ -487,17 +535,26 @@ function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condivi
 
 // ---------- opzioni ----------
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+42,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw;
-  const row=(i,lbl,hint)=>{const y=top+i*rh;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);if(i<4)hline(12,y+rh,W-24,C.line);return y+4};
-  let y=row(0,'GPS');segmented('sgps',cx0,y,cw,rh-8,[['Telefono','phone'],['Demo','demo']],saved.source,v=>{if(saved.source!==v){setSource(v);resize()}});
-  y=row(1,'Giro minimo','sotto, il passaggio viene ignorato');
+  const top=SB+41,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?6:5,ah=H-top,content=nRows*rh+4;
+  const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
+  const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
+    if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
+  let y=row('GPS',ext?(ble.on?('esterno collegato'+(ble.hz?', '+ble.hz+' punti al secondo':'')):'esterno non collegato: tocca Esterno'):'');
+  segmented('sgps',cx0,y,cw,rh-8,[['Telefono','phone'],['Esterno','ble'],['Demo','demo']],saved.source,
+    v=>{if(v==='ble'&&saved.source==='ble'){bleConnect();return}if(saved.source!==v){setSource(v);resize()}});
+  if(ext){y=row('Frequenza GPS esterno','25 Hz usa solo i satelliti GPS');
+    segmented('sext',cx0,y,cw,rh-8,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
+  y=row('Giro minimo','sotto, il passaggio viene ignorato');
   button('dmin',cx0,y,44,rh-8,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()}});
   num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
   button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()}});
-  y=row(2,'Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
-  y=row(3,'Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
-  y=row(4,'Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
-  segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()})}
+  y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
+  y=row('Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
+  y=row('Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
+  segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
+  endList('sscroll',0,top,W,ah,content);
+  // si toccano solo le righe visibili, non quelle scorse sotto l'intestazione
+  hits=hits.slice(0,h0).concat(hits.slice(h0).filter(h=>h.y+h.h/2>top&&h.y+h.h/2<H))}
 
 // ---------- disegno complessivo ----------
 function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
@@ -531,7 +588,7 @@ cv.addEventListener('pointercancel',()=>{pressed=null;drag=null});
 
 // ===================== avvio =====================
 resize();
-if(saved.source==='demo'){}else startPhoneGps();
+if(saved.source==='demo'){}else{startPhoneGps();if(saved.source==='ble')bleAuto()}
 let last=performance.now();
 function loop(t){let dt=Math.min(200,t-last);last=t;
   if(stage.clientWidth!==lastVW||stage.clientHeight!==lastVH||innerWidth!==lastIW||innerHeight!==lastIH||!cv.width)resize();
@@ -545,7 +602,7 @@ requestAnimationFrame(loop);
 if('serviceWorker' in navigator&&location.protocol==='https:'){let had=!!navigator.serviceWorker.controller,reloaded=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!reloaded){reloaded=true;location.reload()}});
   navigator.serviceWorker.register('sw.js').then(r=>r.update()).catch(()=>{})}
-window.__ftt={dev,lt,demo,saved,get hits(){return hits},setSource,onGeo};
+window.__ftt={dev,lt,demo,saved,ble,decodeBlePos,get hits(){return hits},setSource,onGeo};
 }
 </script>
 </body>
