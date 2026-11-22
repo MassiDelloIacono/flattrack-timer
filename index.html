@@ -69,7 +69,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v5';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
+const VERSION='v6';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 
@@ -113,7 +113,7 @@ function onFix(f){
       let i=saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);if(i<0){saved.tracks.push(tk);i=saved.tracks.length-1}else saved.tracks[i]=tk;persist();
       const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i;dev.wiz=3;dev.wizDoneAt=now()}
     else{dev.wiz=1;toast('Troppo lontano dalla linea: riprova')}}
-  if(lt.update(f)){dev.flashUntil=now()+4500;saveSession();try{navigator.vibrate&&navigator.vibrate(lt.lastWasBest?[80,60,80]:60)}catch(e){}}
+  if(lt.update(f)){const rec=lt.lastWasBest&&lt.prevBest>0;if(rec)dev.flashUntil=now()+4500;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
 }
 
 let watchId=null;
@@ -146,6 +146,7 @@ function demoStep(dtMs){const vS=26*demo.pace*demo.lapF,vC=18*demo.pace*demo.lap
     const lat=BASE.lat+y/R/D2R,lon=BASE.lon+x/(R*Math.cos(BASE.lat*D2R))/D2R;
     onGeo(lat,lon,3+Math.random(),demo.v>0.3?demo.v+gauss()*0.1:0,demo.v>1?p.hd:null,Math.round(demo.t))}}
 const $=id=>document.getElementById(id);
+function toggleDemoPanel(){$('demo').classList.toggle('on');setTimeout(resize,30)}
 function setSource(src){saved.source=src;persist();origin=null;dev.hist=[];lt.clearLine();dev.track=-1;dev.fix=false;dev.lastT=0;
   if(src==='demo'){stopPhoneGps();$('demo').classList.add('on')}else{$('demo').classList.remove('on');demo.riding=false;startPhoneGps()}setTimeout(resize,30)}
 $('dGo').onclick=()=>{demo.riding=!demo.riding;$('dGo').textContent=demo.riding?'STOP':'PARTI';$('dGo').classList.toggle('go',!demo.riding)};
@@ -195,7 +196,7 @@ function topBar(center,right){
   for(let i=0;i<4;i++){const h=5+i*3,on=dev.sats>=[1,5,9,12][i];cx.fillStyle=on?col:'#333';cx.fillRect(8+i*6,20-h,4,h)}
   txt(dev.fix?`±${Math.round(dev.hAcc)} m`:'GPS',36,13,15,col,'left');
   const demoOn=saved.source==='demo';
-  if(demoOn){cx.font=F(13);rr(84,6,40,15,4,C.yellow);txt('DEMO',104,14,13,'#111')}
+  if(demoOn){const open=$('demo').classList.contains('on');rr(84,5,44,17,4,open?'#fff':C.yellow);txt('DEMO',106,14,13,'#111');hits.push({id:'demoBadge',x:76,y:0,w:60,h:26,act:toggleDemoPanel})}
   fit(center,W/2+(demoOn?22:10),13,17,'#fff',demoOn?120:150);
   if(dev.battery!=null){const b=Math.round(dev.battery);rr(W-40,7,24,12,2,null,'#888');cx.fillStyle='#888';cx.fillRect(W-16,10,2,6);cx.fillStyle=b<20?C.red:dev.charging?C.green:'#ddd';cx.fillRect(W-38,9,20*b/100,8)}
   if(right)txt(right,W-46,13,16,'#fff','right')}
@@ -326,7 +327,6 @@ cv.addEventListener('pointerup',e=>{const h=hitAt(pt(e));if(h&&h.id===pressed){i
 cv.addEventListener('pointercancel',()=>pressed=null);
 
 // ===================== avvio =====================
-if(saved.source==='demo')$('demo').classList.add('on');
 resize();
 if(saved.source==='demo'){}else startPhoneGps();
 let last=performance.now();
