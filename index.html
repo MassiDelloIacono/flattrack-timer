@@ -25,6 +25,11 @@ canvas{display:block;background:#000;touch-action:none}
 </head>
 <body>
 <div id="loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#ffd21a;font:700 22px sans-serif;text-align:center;padding:20px">Flat Track Timer<br>caricamento…<br><small style="color:#888;font-size:15px">se resta così, chiudi e riapri con internet</small></div>
+<div id="ren" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:5;align-items:center;justify-content:center;flex-direction:column;padding:16px;box-sizing:border-box">
+  <div style="color:#ffd21a;font:800 26px 'Barlow Condensed',sans-serif;margin-bottom:12px">Nome della pista</div>
+  <input id="renIn" maxlength="24" autocomplete="off" style="font:700 26px 'Barlow Condensed',sans-serif;width:min(460px,90vw);padding:10px 14px;border-radius:10px;border:2px solid #ffd21a;background:#111;color:#fff">
+  <div style="display:flex;margin-top:14px"><button id="renNo" style="font:700 22px 'Barlow Condensed',sans-serif;min-height:54px;min-width:140px;border-radius:10px;border:2px solid #555;background:#1b1b1b;color:#fff;margin-right:12px">ANNULLA</button><button id="renOk" style="font:700 22px 'Barlow Condensed',sans-serif;min-height:54px;min-width:140px;border-radius:10px;border:0;background:#ffd21a;color:#111">SALVA</button></div>
+</div>
 <div id="app">
   <div id="stage"><canvas id="scr" aria-label="Cronometro"></canvas></div>
   <div id="demo">
@@ -71,9 +76,13 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v8';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null};
+const VERSION='v10';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,bg:'nero'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
+saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
+const newTrackName=()=>{let k=saved.tracks.length+1;while(saved.tracks.some(t=>t.name==='Pista '+k))k++;return'Pista '+k};
+const trackName=()=>dev.track>=0&&saved.tracks[dev.track]?saved.tracks[dev.track].name:'';
+function useTrack(i){const tk=saved.tracks[i];if(!tk)return;if(!origin)origin={lat:tk.lat,lon:tk.lon};const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i}
 
 const lt=new LapTimer();lt.minLapMs=saved.minLap*1000;
 if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.session.laps;lt.laps=L.slice();lt.lastMs=L[L.length-1];
@@ -106,16 +115,23 @@ function onFix(f){
   dev.gps=f;
   if(f.valid&&!lt.line&&dev.screen!=='wizard'){
     let bi=-1,bd=1500;saved.tracks.forEach((tk,i)=>{const d=hav(tk.lat,tk.lon,f.lat,f.lon);if(d<bd){bd=d;bi=i}});
-    if(bi>=0){const tk=saved.tracks[bi],q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=bi;toast('Pista '+(bi+1)+' riconosciuta')}}
+    if(bi>=0){useTrack(bi);toast(saved.tracks[bi].name+' riconosciuta')}}
   const dPend=dev.pend?hav(f.lat,f.lon,dev.pend.lat,dev.pend.lon):0;
   if(dev.screen==='wizard'&&dev.wiz===2&&f.valid&&dPend>=8&&f.speedKmh>8){
     // direzione del traguardo = dal punto salvato a dove sei adesso (8-60 m dopo): non dipende dal rumore
     if(dPend<60){const q0=toLocal(dev.pend.lat,dev.pend.lon),hd=(Math.atan2(f.x-q0.x,f.y-q0.y)/D2R+360)%360;
       const tk={lat:dev.pend.lat,lon:dev.pend.lon,heading:hd,width:30};
-      let i=saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);if(i<0){saved.tracks.push(tk);i=saved.tracks.length-1}else saved.tracks[i]=tk;persist();
-      const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i;dev.wiz=3;dev.wizDoneAt=now()}
+      // stessa pista (entro 300 m): aggiorno il suo traguardo e tengo nome e record; altrimenti pista nuova
+      let i=saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);
+      if(i<0){tk.name=newTrackName();tk.created=Date.now();saved.tracks.push(tk);i=saved.tracks.length-1;dev.wizNew=true}
+      else{saved.tracks[i]={...saved.tracks[i],lat:tk.lat,lon:tk.lon,heading:hd};dev.wizNew=false}
+      persist();useTrack(i);dev.wiz=3;dev.wizDoneAt=now()}
     else{dev.wiz=1;toast('Troppo lontano dalla linea: riprova')}}
-  if(lt.update(f)){const rec=lt.lastWasBest&&lt.prevBest>0;if(rec)dev.flashUntil=now()+4500;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
+  const lapDone=lt.update(f);
+  {const Hd=dev.dHist||(dev.dHist=[]);if(lt.deltaValid){Hd.push([f.t,lt.delta]);while(Hd.length&&f.t-Hd[0][0]>2500)Hd.shift()}else Hd.length=0}
+  if(lapDone){const tk=saved.tracks[dev.track];dev.trackRec=false;
+    if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;persist()}
+    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
 }
 
 let watchId=null;
@@ -165,7 +181,8 @@ async function goFull(){if(triedFull)return;triedFull=true;try{await document.do
 
 // ===================== disegno =====================
 const cv=$('scr'),cx=cv.getContext('2d');
-let W=320;const H=240,C={bg:'#000',fg:'#fff',dim:'#8c8c8c',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
+const THEMES=[['nero','#000000'],['antracite','#1a1d22'],['blu','#0a1a33'],['verde','#0b2414'],['bordeaux','#2b0a14']];
+let W=320;const H=240,C={bg:'#000',fg:'#fff',dim:'#a8a8a8',green:'#1fe36f',red:'#ff3d33',yellow:'#ffd21a',btn:'#1b1b1b',btnB:'#3d3d3d'};
 let scale=1;
 let lastVW=0,lastVH=0,lastIW=0,lastIH=0;
 const stage=$('stage');
@@ -198,7 +215,7 @@ function fmt(ms,big){if(!ms&&ms!==0)return'--';const m=Math.floor(ms/60000),s=Ma
 const sgn=v=>(v<0?'−':'+')+Math.abs(v).toFixed(2);
 
 function topBar(center,right){
-  cx.fillStyle='#0d0d0d';cx.fillRect(0,0,W,26);
+  cx.fillStyle='rgba(0,0,0,.45)';cx.fillRect(0,0,W,26);
   const col=!dev.fix?C.red:dev.hAcc>8?C.yellow:C.green;
   for(let i=0;i<4;i++){const h=5+i*3,on=dev.sats>=[1,5,9,12][i];cx.fillStyle=on?col:'#333';cx.fillRect(8+i*6,20-h,4,h)}
   txt(dev.fix?`±${Math.round(dev.hAcc)} m`:'GPS',36,13,15,col,'left');
@@ -216,43 +233,72 @@ function drawBoot(){topBar('','');
     fit(dev.lastT?`Precisione ±${Math.round(dev.hAcc)} m · serve meno di 25 m`:'Cerco il GPS… stai all\'aperto',W/2,162,17,C.dim,W-20,600);
     button('demo2',W/2-70,186,140,40,'DEMO',{act:()=>setSource('demo'),size:18})}}
 
-function drawReady(){const tk=dev.track>=0?`PISTA ${dev.track+1}`:'NESSUNA PISTA';topBar(tk,'');
+// grafico a barre degli ultimi giri: più alta = più lento, il migliore in verde
+function drawChart(x,y,w,h){const L=lt.laps.slice(-12),n=L.length;if(!n)return;
+  txt('ULTIMI GIRI',x,y+6,12,C.dim,'left',600);const top=y+16,bh=h-34,lo=Math.min(...L),hi=Math.max(...L),span=Math.max(300,hi-lo);
+  const gap=4,bw=Math.min(26,(w-gap*(n-1))/n),off=lt.laps.length-n;
+  for(let k=0;k<n;k++){const v=L[k],hh=8+(v-lo)/span*(bh-8),bx=x+k*(bw+gap),isB=off+k+1===lt.bestNo,last=k===n-1;
+    cx.fillStyle=isB?C.green:last?'#fff':'#5a5a5a';cx.fillRect(bx,top+bh-hh,bw,hh)}
+  txt(`scarto ${((hi-lo)/1000).toFixed(2)} s`,x,y+h-6,13,'#cfcfcf','left',600)}
+function drawReady(){topBar(trackName()||'NESSUNA PISTA','');
   const n=lt.laps.length;
   if(!lt.line){txt('Nessun traguardo',W/2,52,18,C.dim,'center',600);
-    button('setline',14,68,W-28,90,'IMPOSTA TRAGUARDO',{primary:true,size:30,sub:'fermati sulla linea e tocca qui',act:startWizard})}
-  else if(!n){txt(lt.inLap?'IN GIRO':'PRONTO',W/2,72,52,'#fff','center',800);
+    if(saved.tracks.length){const bw2=Math.round((W-36)*0.62);
+      button('setline',14,68,bw2,90,'NUOVO TRAGUARDO',{primary:true,size:26,sub:'fermati sulla linea',act:startWizard});
+      button('pick',22+bw2,68,W-36-bw2,90,'SCEGLI PISTA',{size:20,sub:`${saved.tracks.length} salvate`,act:openTracks})}
+    else button('setline',14,68,W-28,90,'IMPOSTA TRAGUARDO',{primary:true,size:30,sub:'fermati sulla linea e tocca qui',act:startWizard})}
+  else if(!n){const tk=saved.tracks[dev.track];txt(lt.inLap?'IN GIRO':'PRONTO',W/2,72,52,'#fff','center',800);
+    if(tk&&tk.record)txt('record pista '+fmt(tk.record),W/2,40,15,C.green,'center',700);
     fit(lt.inLap?'riparti per continuare':'passa sul traguardo per partire',W/2,112,18,C.dim,W-20,600);
     txt('il cronometro parte da solo',W/2,138,15,'#5c5c5c','center',600)}
-  else{txt(`MIGLIORE · GIRO ${lt.bestNo}`,W/2,44,15,C.dim,'center',600);fit(fmt(lt.bestMs),W/2,88,64,C.green,W-20,800);
-    const avg=lt.laps.reduce((a,b)=>a+b,0)/n;
-    [['ULTIMO',fmt(lt.lastMs)],['GIRI',String(n)],['MEDIA',fmt(avg)]].forEach((c,i)=>{const x=W/6+i*W/3;txt(c[0],x,128,13,C.dim,'center',600);txt(c[1],x,148,22,'#fff')})}
+  else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,wide=W>=440,cxL=wide?W*0.27:W/2,half=wide?W*0.54:W;
+    txt(`MIGLIORE · GIRO ${lt.bestNo}`,cxL,44,15,C.dim,'center',600);fit(fmt(lt.bestMs),cxL,88,64,C.green,half-24,800);
+    [['ULTIMO',fmt(lt.lastMs)],['GIRI',String(n)],['MEDIA',fmt(avg)]].forEach((c,k)=>{const x=half/6+k*half/3;txt(c[0],x,128,13,C.dim,'center',600);txt(c[1],x,148,22,'#fff')});
+    if(wide)drawChart(half+6,36,W-half-20,124)}
   const bw=(W-28-16)/3;
   button('laps',14,176,bw,54,'GIRI',{act:()=>{dev.screen='laps';dev.scroll=0},sub:n?(n===1?'1 giro':`${n} giri`):'nessuno'});
-  button('line',14+bw+8,176,bw,54,'TRAGUARDO',{act:startWizard,sub:lt.line?'cambia':'imposta'});
-  button('set',14+2*(bw+8),176,bw,54,'OPZIONI',{act:()=>dev.screen='settings',sub:'gps, vista…'})}
+  button('tracks',14+bw+8,176,bw,54,'PISTE',{act:openTracks,sub:saved.tracks.length?`${saved.tracks.length} salvate`:'nessuna'});
+  button('set',14+2*(bw+8),176,bw,54,'OPZIONI',{act:()=>dev.screen='settings',sub:'colori, vista…'})}
 
+const mix=(a,b,k)=>{const p=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)),A=p(a),B=p(b);return`rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')})`};
+function deltaTrend(){const H=dev.dHist||[];if(H.length<2)return 0;const a=H[0],b=H[H.length-1];return b[0]-a[0]>1200?(b[1]-a[1])/((b[0]-a[0])/1000):0}
+function bottomCells(){const n=lt.laps.length,three=W>=400&&lt.deltaValid,cells=[['ULTIMO',fmt(lt.lastMs),'#fff']];
+  if(three)cells.push(['PREVISTO',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),lt.delta<0?C.green:'#ff8a84']);
+  cells.push(['MIGLIORE',fmt(lt.bestMs),C.green]);
+  const cw=W/cells.length,hl=now()<dev.lapHl;
+  cx.fillStyle=C.bg;cx.fillRect(0,192,W,48);cx.fillStyle='#2a2a2a';cx.fillRect(0,192,W,1);
+  cells.forEach((c,k)=>{const x=k*cw;if(k)cx.fillRect(x,192,1,48);
+    if(k===0&&hl){cx.fillStyle=C.yellow;cx.fillRect(x,193,cw,47);txt(c[0],x+cw/2,203,12,'#3b3410','center',700);txt(c[1],x+cw/2,224,26,'#111','center',800);cx.fillStyle='#2a2a2a';return}
+    txt(c[0],x+cw/2,203,12,C.dim,'center',600);txt(c[1],x+cw/2,224,26,c[2],'center',800);cx.fillStyle='#2a2a2a'})}
 function drawRace(){
-  const tNow=lt.cur(gpsTime()),n=lt.laps.length;
-  topBar(`${Math.round(dev.speed)} km/h`,lt.line&&(lt.inLap||n)?`GIRO ${n+(lt.inLap?1:0)}`:'');
+  const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
+  topBar(saved.showSpeed?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`GIRO ${n+(lt.inLap?1:0)}`:'');
   if(now()<dev.flashUntil&&n){
-    const best=lt.lastWasBest;cx.fillStyle=best?'#0a7a35':'#14223d';cx.fillRect(0,26,W,H-26);
-    fit(best?'NUOVO RECORD':`GIRO ${n}`,W/2,52,22,'#fff',W-20,700);fit(fmt(lt.lastMs),W/2,120,104,'#fff',W-20,800);
-    const ref=best?lt.prevBest:lt.bestMs;if(ref){const d=(lt.lastMs-ref)/1000;fit(sgn(d)+(best?' sul vecchio record':' sul migliore'),W/2,186,24,best?'#b9ffd2':d>0?'#ff8a84':'#b9ffd2',W-20,700)}
+    cx.fillStyle='#0a7a35';cx.fillRect(0,26,W,H-26);
+    fit(dev.trackRec?'RECORD DELLA PISTA!':'MIGLIOR GIRO DELLA SESSIONE',W/2,52,24,'#fff',W-20,800);fit(fmt(lt.lastMs),W/2,120,104,'#fff',W-20,800);
+    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)fit(sgn((lt.lastMs-ref)/1000)+(dev.trackRec?' sul vecchio record':' sul migliore'),W/2,186,24,'#b9ffd2',W-20,700);
     hits.push({id:'flash',x:0,y:26,w:W,h:H-26,act:()=>dev.flashUntil=0});return}
-  const lost=!dev.fix;
+  const top=lost?56:26;
   if(lost){cx.fillStyle='#3a0d0b';cx.fillRect(0,26,W,30);fit('GPS PERSO · tempi sospesi',W/2,41,18,'#ffb3ae',W-20,700)}
   if(!lt.line){txt('NESSUN TRAGUARDO',W/2,110,30,C.yellow,'center',800);txt('fermati per impostarlo',W/2,146,18,C.dim,'center',600);return}
   if(!lt.inLap){txt('PASSA SUL',W/2,98,40,C.yellow,'center',800);txt('TRAGUARDO',W/2,140,40,C.yellow,'center',800);return}
-  const view=saved.view;
-  if(view===0&&lt.deltaValid){const d=lt.delta,k=Math.min(1,Math.abs(d)/0.8);
-    cx.fillStyle=d<0?`rgba(31,227,111,${0.10+0.28*k})`:`rgba(255,61,51,${0.10+0.30*k})`;cx.fillRect(0,lost?56:26,W,lost?96:126);
-    txt('DELTA',8,lost?66:38,13,'#ccc','left',600);fit(sgn(d),W/2,96,110,d<0?C.green:C.red,W-16,800);txt(fmt(tNow,true),W/2,170,36,'#fff','center',700)}
-  else{fit(lt.deltaValid?'TEMPO GIRO':`GIRO ${n+1} · primo riferimento`,W/2,lost?66:40,14,C.dim,W-60,600);
-    fit(fmt(tNow,true),W/2,98,104,'#fff',W-16,800);if(lt.deltaValid)txt(sgn(lt.delta),W/2,168,34,lt.delta<0?C.green:C.red,'center',700)}
-  cx.fillStyle='#222';cx.fillRect(0,192,W,1);cx.fillRect(W/2,192,1,48);
-  txt('ULTIMO',W/4,203,12,C.dim,'center',600);txt(fmt(lt.lastMs),W/4,224,24,'#fff');
-  txt('MIGLIORE',3*W/4,203,12,C.dim,'center',600);txt(fmt(lt.bestMs),3*W/4,224,24,C.green);
-  for(let i=0;i<2;i++){cx.beginPath();cx.arc(W-22+i*10,lost?68:38,3,0,7);cx.fillStyle=i===view?'#fff':'#444';cx.fill()}
+  const view=saved.view,mid=(top+192)/2;
+  if(view===0&&lt.deltaValid){
+    const d=lt.delta,k=Math.min(1,Math.abs(d)/0.6);
+    cx.fillStyle=d<0?mix('#06240f','#0c9442',0.25+0.75*k):mix('#2b0806','#c8241b',0.25+0.75*k);cx.fillRect(0,top,W,192-top);
+    txt('DELTA',10,top+12,13,'rgba(255,255,255,.8)','left',700);
+    txt(W<400?'prev. '+fmt(Math.max(0,lt.bestMs+d*1000)):fmt(tNow,true).replace(/(\.\d)\d$/,'$1'),W/2,top+12,15,'rgba(255,255,255,.85)','center',700);
+    const tr=deltaTrend();if(Math.abs(tr)>0.04)txt(tr<0?'IN RECUPERO':'IN PERDITA',W-10,top+12,13,'#fff','right',800);
+    fit(sgn(d),W/2,mid-6,112,'#fff',W-24,800);
+    const by=176,half=W/2-24,bw=Math.min(half,Math.abs(d)*half);
+    cx.fillStyle='rgba(0,0,0,.35)';cx.fillRect(24,by,W-48,8);cx.fillStyle='#fff';cx.fillRect(d<0?W/2-bw:W/2,by,bw,8);cx.fillRect(W/2-1,by-4,2,16);
+  }else{
+    cx.fillStyle=C.bg;cx.fillRect(0,top,W,192-top);
+    fit(lt.deltaValid?'TEMPO GIRO':`GIRO ${n+1} · primo riferimento`,W/2,top+12,14,C.dim,W-60,600);
+    fit(fmt(tNow,true).replace(/(\.\d)\d$/,'$1'),W/2,mid-4,112,'#fff',W-16,800);
+    if(lt.deltaValid)txt(sgn(lt.delta),W/2,176,26,lt.delta<0?C.green:C.red,'center',800)}
+  bottomCells();
+  for(let i=0;i<2;i++){cx.beginPath();cx.arc(W-22+i*10,top+28,3,0,7);cx.fillStyle=i===view?'#fff':'rgba(255,255,255,.3)';cx.fill()}
   hits.push({id:'view',x:0,y:26,w:W,h:H-26,act:()=>{saved.view=1-saved.view;persist()}})}
 
 function drawLaps(){topBar('','');const L=lt.laps,n=L.length;
@@ -267,12 +313,13 @@ function drawLaps(){topBar('','');const L=lt.laps,n=L.length;
     txt(String(i+1),30,y+rh/2,16,C.dim,'right',600);txt(fmt(ms),40,y+rh/2,20,isB?C.green:'#fff','left',700);
     const bw=Math.max(4,(ms-bestMs*0.98)/(worst-bestMs*0.98+1)*90);cx.fillStyle=isB?C.green:'#555';cx.fillRect(120,y+8,bw,6);
     txt(isB?'MIGLIORE':sgn((ms-bestMs)/1000),W-14,y+rh/2,16,isB?C.green:'#ff8a84','right',600)}
-  const bw=(W-28-16)/3;
+  const bw=(W-28-24)/4;
   button('up',14,190,bw,44,'▲',{act:()=>dev.scroll=Math.max(0,dev.scroll-rows),disabled:dev.scroll===0,size:24});
   button('dn',14+bw+8,190,bw,44,'▼',{act:()=>dev.scroll=Math.min(max,dev.scroll+rows),disabled:dev.scroll>=max,size:24});
-  button('reset',14+2*(bw+8),190,bw,44,'AZZERA',{act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')},size:20})}
+  button('share',14+2*(bw+8),190,bw,44,'CONDIVIDI',{act:shareLaps,size:18});
+  button('reset',14+3*(bw+8),190,bw,44,'AZZERA',{act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')},size:18})}
 
-function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}if(lt.line){dev.screen='confirmReplace';return}dev.screen='wizard';dev.wiz=1}
+function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
 function drawWizard(){topBar('TRAGUARDO','');
   if(dev.wiz===1){const moving=dev.speed>5,prec=dev.hAcc;
     fit('1 · Fermati sulla linea',W/2,52,28,'#fff',W-20,800);fit('del traguardo, nel senso di marcia',W/2,80,18,C.dim,W-20,600);
@@ -285,39 +332,71 @@ function drawWizard(){topBar('TRAGUARDO','');
     fit('la direzione di marcia la prendo da solo',W/2,170,16,C.dim,W-20,600);
     button('wcancel2',W/2-60,190,120,42,'ANNULLA',{act:()=>{dev.screen='ready';dev.wiz=0},size:18})}
   else{cx.strokeStyle=C.green;cx.lineWidth=9;cx.lineCap='round';cx.beginPath();cx.moveTo(130,84);cx.lineTo(152,106);cx.lineTo(194,62);cx.stroke();
-    fit('TRAGUARDO SALVATO',W/2,138,30,C.green,W-20,800);fit(`Pista ${dev.track+1}: la riconosco da sola la prossima volta`,W/2,168,15,C.dim,W-20,600)}}
+    fit(dev.wizNew?'PISTA SALVATA':'TRAGUARDO AGGIORNATO',W/2,138,30,C.green,W-20,800);fit(dev.wizNew?`${trackName()} · puoi darle un nome da PISTE`:`${trackName()} · nome e record restano`,W/2,168,15,C.dim,W-20,600)}}
 
-function drawConfirm(title,sub,yesLbl,act){topBar('','');
+function openTracks(){dev.screen='tracks';dev.tsel=dev.track>=0?dev.track:(saved.tracks.length?0:-1);dev.tscroll=Math.max(0,dev.tsel-3)}
+function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i].name;r.style.display='flex';setTimeout(()=>{inp.focus();inp.select()},50);
+  const close=()=>{r.style.display='none';inp.blur()};
+  $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
+  $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
+function drawTracks(){topBar('','');const T=saved.tracks,n=T.length;
+  txt('Piste',12,42,24,'#fff','left',800);txt(n?`${n} salvate`:'',80,44,14,C.dim,'left',600);
+  button('tclose',W-96,30,84,32,'CHIUDI',{act:()=>dev.screen='ready',size:18});
+  const rows=4,top=68,rh=29,max=Math.max(0,n-rows);dev.tscroll=Math.min(dev.tscroll||0,max);
+  if(!n)fit('Nessuna pista: imposta un traguardo per crearne una',W/2,120,17,C.dim,W-20,600);
+  const lw=W-14-(n>rows?52:14);
+  for(let r=0;r<rows&&r+dev.tscroll<n;r++){const i=r+dev.tscroll,t=T[i],y=top+r*rh,sel=i===dev.tsel,act=i===dev.track;
+    rr(14,y,lw-14,rh-4,6,sel?'rgba(255,210,26,.18)':'rgba(255,255,255,.05)',sel?C.yellow:null);
+    const dist=dev.gps&&dev.gps.lat?hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon):null;
+    const info=[t.record?'record '+fmt(t.record):'nessun record',dist==null?'':dist<1000?`a ${Math.round(dist)} m`:`a ${(dist/1000).toFixed(dist<10000?1:0)} km`].filter(Boolean).join(' · ');
+    cx.font=F(14,600);const iw=cx.measureText(info).width;txt(info,lw-8,y+(rh-4)/2,14,act?C.yellow:C.dim,'right',600);
+    let fs=19;cx.font=F(fs,800);while(cx.measureText(t.name).width>lw-40-iw&&fs>12){fs--;cx.font=F(fs,800)}
+    let nm=t.name;while(cx.measureText(nm).width>lw-40-iw&&nm.length>3)nm=nm.slice(0,-2)+'…';
+    txt(nm,24,y+(rh-4)/2,fs,act?C.yellow:'#fff','left',800);
+    hits.push({id:'trow'+i,x:14,y,w:lw-14,h:rh-4,act:()=>dev.tsel=i})}
+  if(n>rows){button('tup',W-46,top,34,rows*rh/2-4,'▲',{act:()=>dev.tscroll=Math.max(0,dev.tscroll-1),disabled:dev.tscroll===0,size:18});
+    button('tdn',W-46,top+rows*rh/2,34,rows*rh/2-4,'▼',{act:()=>dev.tscroll=Math.min(max,dev.tscroll+1),disabled:dev.tscroll>=max,size:18})}
+  const ok=dev.tsel>=0&&dev.tsel<n,bw=(W-28-24)/4;
+  button('tuse',14,190,bw,44,'USA',{primary:ok,disabled:!ok,size:22,act:()=>{if(lt.laps.length&&dev.tsel!==dev.track){dev.screen='confirmSwitch';return}useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')}});
+  button('tren',14+(bw+8),190,bw,44,'RINOMINA',{disabled:!ok,size:18,act:()=>openRename(dev.tsel)});
+  button('tdel',14+2*(bw+8),190,bw,44,'CANCELLA',{disabled:!ok,size:18,act:()=>dev.screen='confirmDel'});
+  button('tnew',14+3*(bw+8),190,bw,44,'NUOVA',{size:20,act:startWizard})}
+
+function drawConfirm(title,sub,yesLbl,act,back='ready'){topBar('','');
   fit(title,W/2,66,30,'#fff',W-20,800);fit(sub,W/2,102,17,C.dim,W-20,600);
-  button('no',14,160,(W-36)/2,64,'NO',{act:()=>dev.screen='ready',size:28});
+  button('no',14,160,(W-36)/2,64,'NO',{act:()=>dev.screen=back,size:28});
   button('yes',22+(W-36)/2,160,(W-36)/2,64,yesLbl,{danger:true,act,size:24})}
 
 function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condividere');return}
-  const lines=[`Flat Track Timer · ${new Date().toLocaleString('it-IT')}`,`Pista ${dev.track+1}`,`Migliore: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
+  const lines=[`Flat Track Timer · ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Migliore: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
   if(navigator.share)navigator.share({title:'Giri',text:lines}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 function drawSettings(){topBar('','');
-  txt('Opzioni',12,46,26,'#fff','left',800);txt(VERSION,W-104,50,12,'#555','right',600);button('sclose',W-96,32,84,38,'CHIUDI',{act:()=>dev.screen='ready',size:18});
-  txt('GPS',14,98,19,'#fff','left',600);
-  [['TELEFONO','phone'],['DEMO','demo']].forEach(([l,v],i)=>button('src'+i,130+i*92,78,88,40,l,{primary:saved.source===v,size:19,act:()=>{if(saved.source!==v){setSource(v);resize()}}}));
-  txt('Giro minimo',14,144,19,'#fff','left',600);
-  button('dmin',130,124,48,40,'−',{act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()},size:26});
-  txt(saved.minLap+' s',(178+W-62)/2,144,20,C.yellow);
-  button('imin',W-62,124,48,40,'+',{act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()},size:26});
-  txt('Vista in gara',14,190,19,'#fff','left',600);
-  ['DELTA','TEMPO'].forEach((l,i)=>button('v'+i,130+i*92,170,88,40,l,{primary:saved.view===i,size:19,act:()=>{saved.view=i;persist()}}));
-  button('share',14,214,140,24,'CONDIVIDI GIRI',{size:15,act:shareLaps});
-  button('del',W-154,214,140,24,'CANCELLA PISTA',{size:15,act:()=>{if(dev.track>=0)dev.screen='confirmDel';else toast('Nessuna pista caricata')}})}
+  txt('Opzioni',12,42,24,'#fff','left',800);txt(VERSION,W-104,46,12,'#666','right',600);button('sclose',W-96,30,84,32,'CHIUDI',{act:()=>dev.screen='ready',size:18});
+  const seg=(y,lbl,opts,cur,set)=>{txt(lbl,14,y+15,18,'#fff','left',600);opts.forEach(([l,v],k)=>button('s'+y+k,130+k*92,y,88,30,l,{primary:cur===v,size:17,act:()=>set(v)}))};
+  seg(66,'GPS',[['TELEFONO','phone'],['DEMO','demo']],saved.source,v=>{if(saved.source!==v){setSource(v);resize()}});
+  txt('Giro minimo',14,116,18,'#fff','left',600);
+  button('dmin',130,101,48,30,'−',{act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()},size:24});
+  txt(saved.minLap+' s',(178+W-62)/2,116,19,C.yellow);
+  button('imin',W-62,101,48,30,'+',{act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()},size:24});
+  seg(136,'Vista in gara',[['DELTA',0],['TEMPO',1]],saved.view,v=>{saved.view=v;persist()});
+  seg(171,'Velocità',[['NO',false],['SÌ',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
+  txt('Sfondo',14,221,18,'#fff','left',600);
+  const sw=Math.min(52,(W-144)/THEMES.length-6);
+  THEMES.forEach(([name,col],k)=>{const x=130+k*(sw+6),y=206,sel=(saved.bg||'nero')===name;
+    rr(x,y,sw,30,6,col,sel?C.yellow:'#666');if(sel){cx.lineWidth=3;cx.strokeStyle=C.yellow;cx.beginPath();cx.roundRect(x,y,sw,30,6);cx.stroke()}
+    hits.push({id:'bg'+k,x,y,w:sw,h:30,act:()=>{saved.bg=name;persist()}})})}
 
-function render(){cx.setTransform(scale,0,0,scale,0,0);hits=[];cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
+function render(){C.bg=(THEMES.find(t=>t[0]===saved.bg)||THEMES[0])[1];document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
   const s=dev.screen;
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
-  else if(s==='wizard')drawWizard();else if(s==='settings')drawSettings();
+  else if(s==='wizard')drawWizard();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();
   else if(s==='confirmReset')drawConfirm('Nuova sessione?',`I ${lt.laps.length} giri vengono cancellati`,'SÌ, AZZERA',()=>{lt.resetSession();saveSession();dev.screen='ready';toast('Sessione azzerata')});
-  else if(s==='confirmReplace')drawConfirm('Cambiare traguardo?','Quello attuale verrà sostituito','SÌ, CAMBIA',()=>{lt.clearLine();dev.screen='wizard';dev.wiz=1});
-  else if(s==='confirmDel')drawConfirm('Cancellare la pista?',`Pista ${dev.track+1} e il suo traguardo`,'CANCELLA',()=>{saved.tracks.splice(dev.track,1);persist();lt.clearLine();dev.track=-1;dev.screen='ready';toast('Pista cancellata')});
-  if(dev.toast&&now()<dev.toastUntil){cx.font=F(18);const w=cx.measureText(dev.toast).width+28;rr((W-w)/2,H-46,w,32,16,'rgba(255,210,26,.95)');txt(dev.toast,W/2,H-30,18,'#111')}}
+  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri di questa sessione vengono azzerati`,'SÌ, CAMBIA',()=>{lt.resetSession();saveSession();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
+  else if(s==='confirmDel'){const t=saved.tracks[dev.tsel];drawConfirm('Cancellare la pista?',t?`${t.name}${t.record?' · record '+fmt(t.record):''}`:'','CANCELLA',()=>{const i=dev.tsel;saved.tracks.splice(i,1);persist();
+    if(i===dev.track){lt.clearLine();dev.track=-1}else if(i<dev.track)dev.track--;dev.tsel=Math.min(i,saved.tracks.length-1);dev.screen='tracks';toast('Pista cancellata')},'tracks')}
+  if(dev.toast&&now()<dev.toastUntil){cx.font=F(18);const w=cx.measureText(dev.toast).width+28;rr((W-w)/2,30,w,30,15,'rgba(255,210,26,.97)');txt(dev.toast,W/2,45,18,'#111')}}
 
 function autoScreens(){const s=dev.screen;
   if(dev.lastT&&now()-dev.lastPerf>4000)dev.fix=false;     // nessun punto GPS da 4 s
