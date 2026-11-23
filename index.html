@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v48';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v49';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -475,12 +475,14 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
   else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs;
     const py=top+16,ph=104,map=tk&&tk.trace&&W>=440,mw=map?Math.min(170,W*0.3):0,nx=16;
     // il pezzo forte: blocco rosa pieno, testo scuro
-    rr(10,py,W-20,ph,16,C.accent);
-    txt('miglior giro',nx+2,py+12,11,C.onAccentDim,'left',500,'m');txt(lapLabel(lt.bestNo-1,lt.laps,lt.ends),W-24-mw-8,py+12,11,C.onAccentDim,'right',500,'m');
-    if(map){cx.fillStyle=C.onAccentDim;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20,C.onAccent);
+    // si può spegnere in Opzioni > Schermo: allora fondo normale e tempo verde
+    const pink=saved.pinkHero!==false,ink=pink?C.onAccent:C.gainTxt,inkDim=pink?C.onAccentDim:C.dim;
+    if(pink)rr(10,py,W-20,ph,16,C.accent);
+    txt('miglior giro',nx+2,py+12,11,inkDim,'left',500,'m');txt(lapLabel(lt.bestNo-1,lt.laps,lt.ends),W-24-mw-8,py+12,11,inkDim,'right',500,'m');
+    if(map){cx.fillStyle=pink?C.onAccentDim:C.line;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20,pink?C.onAccent:null);
       hits.push({id:'heroMap',x:W-24-mw,y:py,w:mw+14,h:ph,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
-    num(fmt(lt.bestMs),nx,py+ph/2+(rec?-4:4),rec?62:72,C.onAccent,'left',700,W-60-mw);
-    if(rec){const rt='record '+fmt(tk.record);cx.font=FM(12);const rw=cx.measureText(rt).width+20;rr(nx,py+ph-26,rw,18,9,C.onAccent);txt(rt,nx+10,py+ph-17,12,C.accent,'left',500,'m')}
+    num(fmt(lt.bestMs),nx,py+ph/2+(rec?-4:4),rec?62:72,ink,'left',700,W-60-mw);
+    if(rec){const rt='record '+fmt(tk.record);cx.font=FM(12);const rw=cx.measureText(rt).width+20;rr(nx,py+ph-26,rw,18,9,pink?C.onAccent:C.surface);txt(rt,nx+10,py+ph-17,12,pink?C.accent:C.fg,'left',500,'m')}
     const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg],['Turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-24)/4;
     let cs=24;cells.forEach(([,v])=>{while(cs>14&&numMetrics(v,cs,700).tot>pw-20)cs--});
@@ -801,7 +803,8 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   else{
     let cy=item('Colori',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
     segmented('sth',x0,cy,w0,ch,[['Automatici','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
-    txt('Resta acceso',x0,y+8,14,C.fg,'left',600);txt('sempre, mentre ApexLap è aperta',x0+w0,y+8,12,C.dim,'right',500);y+=30;
+    cy=item('Blocco del miglior giro',saved.pinkHero!==false?'su un blocco rosa':'semplice, tempo in verde');
+    segmented('spink',x0,cy,w0,ch,[['Rosa',1],['Semplice',0]],saved.pinkHero!==false?1:0,v=>{saved.pinkHero=!!v;persist()});
     if(instEvt){cy=item('Installa come app','icona pulita, senza Chrome');
       button('inst',x0,cy,w0,ch,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}}}
 
