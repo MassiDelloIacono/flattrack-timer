@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v45';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v46';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -747,58 +747,61 @@ function shareLaps(L,E,track,date){if(!L.length){toast('Nessun giro da condivide
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 // ---------- opzioni ----------
-// Opzioni: a sinistra le sezioni, a destra le scelte di quella sezione; tutto in una schermata, niente scorrimento
+// Opzioni: a sinistra le sezioni con il valore attuale (si vede tutto senza aprire niente), a destra le scelte
 const SET_TABS=[['gps','GPS'],['gara','In gara'],['giri','Giri'],['tempi','Tempi'],['schermo','Schermo']];
+function setSummary(id){
+  if(id==='gps')return saved.source==='demo'?'Demo':saved.source==='phone'?'Telefono':`Esterno ${saved.extMode===0?10:25} Hz`+(ble.on?'':', scollegato');
+  if(id==='gara')return saved.view===1?'Tempo del giro':saved.dmode==='live'?'Delta continuo':'Delta per settore';
+  if(id==='giri')return`minimo ${effMinLap()} s`+(saved.minLapAuto!==false?', auto':'');
+  if(id==='tempi')return fmt(83340);
+  return{auto:'Colori automatici',giorno:'Giorno',sera:'Sera'}[saved.theme||'auto']}
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);scrollZone=null;
-  const top=SB+41,sw=Math.min(150,W*0.28),tab=dev.setTab||'gps',th=Math.min(36,(H-top-8)/SET_TABS.length);
-  // sezioni
-  SET_TABS.forEach(([id,l],k)=>{const y=top+4+k*th,sel=id===tab;
-    if(sel)rr(8,y+2,sw-12,th-4,8,C.surface);
-    txt(l,24,y+th/2,15,sel?C.fg:C.dim,'left',sel?700:600);
-    if(sel){cx.beginPath();cx.arc(15,y+th/2,3,0,7);cx.fillStyle=C.accent;cx.fill()}
+  const top=SB+41,sw=Math.min(170,W*0.32),tab=dev.setTab||'gps',th=(H-top-6)/SET_TABS.length;
+  SET_TABS.forEach(([id,l],k)=>{const y=top+3+k*th,sel=id===tab,warn=id==='gps'&&saved.source==='ble'&&!ble.on;
+    if(sel)rr(6,y+2,sw-10,th-4,8,C.surface);
+    txt(l,22,y+th/2-7,15,sel?C.fg:C.dim,'left',700);
+    fitT(setSummary(id),22,y+th/2+9,11,warn?C.warn:sel?C.dim:C.faint,sw-34,'left',500);
+    if(sel){cx.beginPath();cx.arc(13,y+th/2-7,3,0,7);cx.fillStyle=C.accent;cx.fill()}
     hits.push({id:'st_'+id,x:0,y,w:sw,h:th,act:()=>dev.setTab=id})});
-  cx.fillStyle=C.line;cx.fillRect(sw+4,top+8,1,H-top-16);
-  // scelte: etichetta sopra, comando sotto a tutta larghezza
-  const x0=sw+20,w0=W-x0-14,ch=30;let y=top+6;
-  const item=(lbl,hint)=>{txt(lbl,x0,y+8,14,C.fg,'left',600);if(hint)fitT(hint,x0+w0,y+8,12,C.dim,w0*0.55,'right',500);const cy=y+20;y+=ch+30;return cy};
+  // scelte: nome, spiegazione sotto, comando a tutta larghezza
+  const x0=sw+14,w0=W-x0-14,ch=27;let y=top+6;
+  const item=(lbl,hint)=>{txt(lbl,x0,y+6,14,C.fg,'left',700);if(hint)fitT(hint,x0,y+19,11,C.dim,w0,'left',500);const cy=y+(hint?27:16);y=cy+ch+8;return cy};
+  const info=(lbl,val,col)=>{txt(lbl,x0,y+8,14,C.fg,'left',700);num(val,x0+w0,y+8,16,col||C.fg,'right',700,w0*0.6);y+=26};
   if(tab==='gps'){const ext=saved.source==='ble';
-    let cy=item('Da dove arriva la posizione',saved.source==='demo'?'giri simulati':saved.source==='phone'?'GPS del telefono':ble.on?'esterno collegato':'esterno non collegato');
+    let cy=item('Posizione',saved.source==='demo'?'giri simulati, per provare l\'app':saved.source==='phone'?'GPS del telefono, circa 1 punto al secondo':'GPS esterno via Bluetooth, il più preciso');
     segmented('sgps',x0,cy,w0,ch,[['Telefono','phone'],['Esterno','ble'],['Demo','demo']],saved.source,
       v=>{if(v==='ble'&&saved.source==='ble'){bleConnect();return}if(saved.source!==v){setSource(v);resize()}});
-    if(ext){cy=item('Frequenza del GPS esterno','25 Hz usa solo i satelliti GPS');
+    if(ext){cy=item('Frequenza','25 Hz: più punti, solo satelliti GPS. 10 Hz: anche Galileo');
       segmented('sext',x0,cy,w0,ch,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
-    // stato del segnale, da leggere e basta
-    const st=!dev.fix?'Nessun segnale':`Precisione ±${Math.round(dev.hAcc)} m`+(ext&&ble.on&&ble.hz?`, ${ble.hz} punti al secondo`:'');
-    txt('Segnale',x0,y+8,14,C.fg,'left',600);txt(st,x0+w0,y+8,14,dev.fix?(dev.hAcc<6?C.gainTxt:C.fg):C.lossTxt,'right',600);
-    if(ext&&!ble.on)button('sble',x0,y+22,w0,ch,'Collega GPS esterno',{primary:true,size:14,act:()=>bleConnect()})}
+    if(ext&&!ble.on)button('sble',x0,y,w0,ch,'Collega GPS esterno',{primary:true,size:14,act:()=>bleConnect()});
+    else info('Segnale',!dev.fix?'nessuno':`±${Math.round(dev.hAcc)} m`+(ext&&ble.hz?`  ${ble.hz} Hz`:''),!dev.fix?C.lossTxt:dev.hAcc<6?C.gainTxt:C.warn)}
   else if(tab==='gara'){
-    let cy=item('Numero grande','anche con un tocco in gara');
+    let cy=item('Numero grande','in gara si cambia anche con un tocco sullo schermo');
     segmented('sview',x0,cy,w0,ch,[['Delta',0],['Tempo del giro',1]],saved.view,v=>{saved.view=v;persist()});
-    cy=item('Delta',saved.dmode==='live'?'cambia di continuo':'fermo, cambia a ogni settore');
+    cy=item('Delta',saved.dmode==='live'?'cambia di continuo':'resta fermo e cambia a ogni settore');
     segmented('sdm',x0,cy,w0,ch,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
     cy=item('Velocità in alto');
     segmented('sspd',x0,cy,w0,ch,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()})}
   else if(tab==='giri'){const tk=saved.tracks[dev.track],auto=saved.minLapAuto!==false;
-    let cy=item('Giro minimo','i passaggi più brevi vengono ignorati');
+    let cy=item('Giro minimo','un passaggio sul traguardo più breve di così viene ignorato');
     segmented('sminA',x0,cy,w0,ch,[['Automatico',1],['Fisso',0]],auto?1:0,v=>{saved.minLapAuto=!!v;applyMinLap();persist()});
-    if(auto){txt('Adesso',x0,y+8,14,C.fg,'left',600);num(effMinLap()+' s',x0+w0,y+8,16,C.fg,'right',700);
-      y+=22;fitT(tk&&tk.record?'Metà del record di questa pista':'Senza record vale il valore fisso, poi metà del record',x0,y+8,12,C.dim,w0,'left',500);y+=24}
-    cy=item(auto?'Valore fisso, se la pista non ha record':'Valore fisso');
-    button('dmin',x0,cy,56,ch,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);applyMinLap();persist()}});
-    num(saved.minLap+' s',x0+w0/2,cy+ch/2+1,18,C.fg,'center',700);
-    button('imin',x0+w0-56,cy,56,ch,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}})}
+    if(auto){info('Adesso',effMinLap()+' s');fitT(tk&&tk.record?`metà del record di ${tk.name}`:'finché la pista non ha un record vale il valore fisso',x0,y,11,C.dim,w0,'left',500)}
+    else{cy=item('Valore');
+      button('dmin',x0,cy,64,ch,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);applyMinLap();persist()}});
+      num(saved.minLap+' s',x0+w0/2,cy+ch/2+1,18,C.fg,'center',700);
+      button('imin',x0+w0-64,cy,64,ch,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}})}}
   else if(tab==='tempi'){
-    let cy=item('Precisione','il millesimo è indicativo');
+    let cy=item('Cifre dopo i secondi','il millesimo con il GPS è indicativo');
     segmented('sdec',x0,cy,w0,ch,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
-    cy=item('Come si scrivono');
-    segmented('sfmt',x0,cy,w0,ch,saved.dec===2?[['1:41.58','dot'],["1'41\"58",'apex']]:[['1:41.580','dot'],["1'41\"580",'apex']],saved.tfmt==='apex'?'apex':'dot',v=>{saved.tfmt=v;persist()});
-    txt('Esempio',x0,y+8,14,C.fg,'left',600);num(fmt(83340),x0+w0,y+8,18,C.fg,'right',700)}
+    cy=item('Stile');
+    segmented('sfmt',x0,cy,w0,ch,[['Digitale','dot'],['Cronometrista','apex']],saved.tfmt==='apex'?'apex':'dot',v=>{saved.tfmt=v;persist()});
+    info('Un giro da 1 minuto e 23',fmt(83340),C.accentTxt)}
   else{
-    let cy=item('Colori',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
+    let cy=item('Colori',(saved.theme||'auto')==='auto'?(isDay()?'di giorno chiari, la sera scuri: ora giorno':'di giorno chiari, la sera scuri: ora sera'):saved.theme==='giorno'?'chiari, si leggono meglio al sole':'scuri, riposano la vista la sera');
     segmented('sth',x0,cy,w0,ch,[['Automatici','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
-    txt('Resta acceso',x0,y+8,14,C.fg,'left',600);txt('sempre, mentre ApexLap è aperta',x0+w0,y+8,12,C.dim,'right',500);y+=30;
-    if(instEvt){cy=item('Installa come app','icona pulita, senza Chrome');
-      button('inst',x0,cy,w0,ch,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}}}
+    if(instEvt){cy=item('App sul telefono','icona pulita, si apre senza Chrome');
+      button('inst',x0,cy,w0,ch,'Installa ApexLap',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}
+    else fitT('Lo schermo resta acceso finché ApexLap è aperta',x0,y+6,12,C.faint,w0,'left',500)}}
 
 // ---------- disegno complessivo ----------
 function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
