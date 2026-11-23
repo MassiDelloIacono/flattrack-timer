@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v43';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v44';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -748,7 +748,7 @@ function shareLaps(L,E,track,date){if(!L.length){toast('Nessun giro da condivide
 
 // ---------- opzioni ----------
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+41,rh=36,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?10:9,ah=H-top,content=nRows*rh+4;
+  const top=SB+41,rh=36,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=(ext?10:9)+(instEvt?1:0),ah=H-top,content=nRows*rh+4;
   const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
   const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
     if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
@@ -774,6 +774,8 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   y=row('Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
   y=row('Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
   segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
+  if(instEvt){y=row('Installa come app','icona pulita, senza il simbolo di Chrome');
+    button('inst',cx0,y,cw,rh-8,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}
   endList('sscroll',0,top,W,ah,content);
   // si toccano solo le righe visibili, non quelle scorse sotto l'intestazione
   hits=hits.slice(0,h0).concat(hits.slice(h0).filter(h=>h.y+h.h/2>top&&h.y+h.h/2<H))}
@@ -801,6 +803,8 @@ function autoScreens(){const s=dev.screen;
 
 // ===================== tocco =====================
 let lastPt={x:0,y:0};
+// Chrome offre l'installazione vera (WebAPK, icona senza simbolo di Chrome): la tengo per il pulsante in Opzioni
+let instEvt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEvt=e});window.addEventListener('appinstalled',()=>{instEvt=null});
 const pt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}};
 const hitAt=p=>{for(let i=hits.length-1;i>=0;i--){const h=hits[i];if(p.x>=h.x&&p.x<=h.x+h.w&&p.y>=h.y&&p.y<=h.y+h.h)return h}return null};
 cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}
