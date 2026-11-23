@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v27';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v28';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -84,6 +84,7 @@ const newTrackName=()=>{let k=saved.tracks.length+1;while(saved.tracks.some(t=>t
 const trackName=()=>dev.track>=0&&saved.tracks[dev.track]?saved.tracks[dev.track].name:'';
 function useTrack(i){const tk=saved.tracks[i];if(!tk)return;if(!origin)origin={lat:tk.lat,lon:tk.lon};const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i}
 
+if(!saved.viewFix){saved.view=0;saved.viewFix=1;persist()}
 const lt=new LapTimer();lt.minLapMs=saved.minLap*1000;
 if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.session.laps;lt.laps=L.slice();lt.lastMs=L[L.length-1];
   L.forEach((ms,i)=>{if(!lt.bestMs||ms<lt.bestMs){lt.bestMs=ms;lt.bestNo=i+1}})}
@@ -446,10 +447,10 @@ function deltaTrend(){const Hh=dev.dHist||[];if(Hh.length<2)return 0;const a=Hh[
 function ledBar(y,d,valid){const n=10,gap=3,sw=(W-16-gap*(n-1))/n,lit=valid?Math.min(5,Math.round(Math.abs(d)/0.1)):0;
   for(let i=0;i<n;i++){const x=8+i*(sw+gap),left=i<5,dist=left?4-i:i-5,on=valid&&dist<lit&&((d<0&&left)||(d>0&&!left));
     rr(x,y,sw,8,2,on?(left?C.gain:C.loss):C.off)}}
-function bottomCells(y){const three=W>=400&&lt.deltaValid,cells=[['Ultimo',fmt(lt.lastMs),C.fg]];
+function bottomCells(y){const three=W>=400&&lt.deltaValid,cells=[['Ultimo',lt.laps.length?fmt(lt.lastMs):'--',C.fg]];
   // in gara il colore è solo del delta grande: questi sono dati di riferimento, neutri
   if(three)cells.push(['Previsto',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),C.fg]);
-  cells.push(['Migliore',fmt(lt.bestMs),C.fg]);
+  cells.push(['Migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
   const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
   cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
     panel(x,py,pw,ph,l,null,fl?C.accent:C.line);num(v,x+6,py+ph/2+4,28,fl?C.accentTxt:c,'left',700,pw-16)})}
@@ -480,14 +481,16 @@ function drawRace(){
     const tr=deltaTrend();
     panel(8,py,W-16,ph,'Delta',Math.abs(tr)>0.04?(tr<0?'In recupero':'In perdita'):null,C.frame);
     num(sgn(d),W/2,mid,lost?96:112,dc,'center',700,W-40);
-    num(fmt1(tNow),W-24,py+ph-14,15,C.dim,'right',600);
+  }else if(!valid){
+    // primo giro (o nessun riferimento): niente numeri che scorrono, solo una scritta ferma
+    panel(8,py,W-16,ph,`Giro ${n+1}`,null,C.frame);
+    txt('Giro di riferimento',W/2,mid-8,30,C.fg,'center',600);
+    txt('Dal prossimo giro vedi il delta, verde o rosso',W/2,mid+26,15,C.dim,'center',500);
   }else{
     panel(8,py,W-16,ph,valid?'Tempo giro':`Giro ${n+1}: fa da riferimento`,null,C.frame);
     num(fmt1(tNow),W/2,mid-(valid?8:0),lost?92:104,C.fg,'center',700,W-40);
     if(valid)num(sgn(d),W/2,py+ph-16,22,dc,'center',700)}
-  bottomCells(cellsY);
-  for(let i=0;i<2;i++){cx.beginPath();cx.arc(24+i*9,py+ph-14,2.5,0,7);cx.fillStyle=i===view?C.accentTxt:C.off;cx.fill()}
-  hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}
+  bottomCells(cellsY)}
 
 // ---------- liste trascinabili ----------
 let scrollZone=null,drag=null;
