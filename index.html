@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v26';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v27';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -447,8 +447,9 @@ function ledBar(y,d,valid){const n=10,gap=3,sw=(W-16-gap*(n-1))/n,lit=valid?Math
   for(let i=0;i<n;i++){const x=8+i*(sw+gap),left=i<5,dist=left?4-i:i-5,on=valid&&dist<lit&&((d<0&&left)||(d>0&&!left));
     rr(x,y,sw,8,2,on?(left?C.gain:C.loss):C.off)}}
 function bottomCells(y){const three=W>=400&&lt.deltaValid,cells=[['Ultimo',fmt(lt.lastMs),C.fg]];
-  if(three)cells.push(['Previsto',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),lt.delta<0?C.gainTxt:C.lossTxt]);
-  cells.push(['Migliore',fmt(lt.bestMs),C.gainTxt]);
+  // in gara il colore è solo del delta grande: questi sono dati di riferimento, neutri
+  if(three)cells.push(['Previsto',fmt(Math.max(0,lt.bestMs+lt.delta*1000)),C.fg]);
+  cells.push(['Migliore',fmt(lt.bestMs),C.fg]);
   const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
   cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
     panel(x,py,pw,ph,l,null,fl?C.accent:C.line);num(v,x+6,py+ph/2+4,28,fl?C.accentTxt:c,'left',700,pw-16)})}
