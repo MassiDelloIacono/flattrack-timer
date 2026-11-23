@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v50';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v51';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -486,7 +486,7 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg],['Turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-24)/4;
     let cs=24;cells.forEach(([,v])=>{while(cs>14&&numMetrics(v,cs,700).tot>pw-20)cs--});
-    cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
+    cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=null;
       // etichetta e numero centrati sulla colonna; il distacco dell'ultimo giro sta accanto all'etichetta
       cx.font=FM(11);const lw=cx.measureText(l.toLowerCase()).width,gw=g?cx.measureText(g).width+6:0,lx=x+pw/2-(lw+gw)/2;
       txt(l.toLowerCase(),lx,cy+5,11,C.dim,'left',500,'m');if(g)txt(g,lx+lw+6,cy+5,11,C.lossTxt,'left',500,'m');
