@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v28';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v29';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -487,10 +487,16 @@ function drawRace(){
     txt('Giro di riferimento',W/2,mid-8,30,C.fg,'center',600);
     txt('Dal prossimo giro vedi il delta, verde o rosso',W/2,mid+26,15,C.dim,'center',500);
   }else{
-    panel(8,py,W-16,ph,valid?'Tempo giro':`Giro ${n+1}: fa da riferimento`,null,C.frame);
-    num(fmt1(tNow),W/2,mid-(valid?8:0),lost?92:104,C.fg,'center',700,W-40);
-    if(valid)num(sgn(d),W/2,py+ph-16,22,dc,'center',700)}
-  bottomCells(cellsY)}
+    // vista "Tempo": il tempo dell'ultimo giro, fermo per tutto il giro (cambia solo al traguardo)
+    const g=lt.lastMs-lt.bestMs;
+    panel(8,py,W-16,ph,'Ultimo giro',null,C.frame);
+    num(fmt(lt.lastMs),W/2,mid-8,lost?92:104,C.fg,'center',700,W-40);
+    if(g>0)num(gap(g/1000)+' dal migliore',W/2,py+ph-16,20,C.lossTxt,'center',700,W-60);
+    else txt('Miglior giro',W/2,py+ph-16,18,C.gainTxt,'center',600)}
+  bottomCells(cellsY);
+  // un tocco scambia Delta e Tempo (i pallini dicono quale vista è attiva)
+  if(valid){for(let i=0;i<2;i++){cx.beginPath();cx.arc(W-30+i*10,py+4,2.5,0,7);cx.fillStyle=i===view?C.accentTxt:C.off;cx.fill()}
+    hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}}
 
 // ---------- liste trascinabili ----------
 let scrollZone=null,drag=null;
