@@ -8,7 +8,7 @@
 <title>Flat Track Timer</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Barlow Condensed","Roboto Condensed",sans-serif}
 #app{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;display:flex;align-items:stretch;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v21';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v22';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -286,7 +286,9 @@ function resize(){
   cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);scale=ch*dpr/H}
 addEventListener('resize',resize);document.addEventListener('fullscreenchange',()=>setTimeout(resize,100));screen.orientation&&screen.orientation.addEventListener&&screen.orientation.addEventListener('change',()=>setTimeout(resize,100));
 // ---------- tipografia: etichette in Barlow, numeri in Barlow Condensed a cifre di larghezza fissa ----------
-const FN=(s,w=700)=>`${w} ${s}px "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
+// numeri in Exo 2 (sportivo, da cruscotto); Barlow Condensed resta come riserva se il font non è ancora scaricato
+const FN=(s,w=700)=>`${w} ${s}px "Exo 2","Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
+try{['600','700','800'].forEach(w=>document.fonts.load(w+' 40px "Exo 2"'))}catch(e){}
 const FL=(s,w=600)=>`${w} ${s}px "Barlow","Roboto","Helvetica Neue",sans-serif`;
 const F=FN;
 let hits=[],pressed=null;
