@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v30';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v31';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -100,26 +100,20 @@ const gpsTime=()=>dev.lastT?dev.lastT+Math.min(1500,now()-dev.lastPerf):0;
 function buildTrace(pts,tk,ms){if(!pts||pts.length<10)return null;const o=[tk.lat,tk.lon],kx=R*D2R*Math.cos(o[0]*D2R),ky=R*D2R,out=[];let lx=null,ly=null;
   for(const p of pts){const x=(p[1]-o[1])*kx,y=(p[0]-o[0])*ky;if(lx==null||Math.hypot(x-lx,y-ly)>=1.5){out.push([Math.round(x*10),Math.round(y*10),Math.round(p[2])]);lx=x;ly=y}if(out.length>=2500)break}
   return out.length>=10?{o,p:out,ms,d:Date.now()}:null}
-// ===================== settori: si chiudono all'uscita di ogni curva =====================
+// ===================== settori: tratti uguali da circa 3 secondi l'uno =====================
 const splitCache={k:null,v:null};
 function trackSplits(tk){const tr=tk&&tk.trace;if(!tr||!tr.p||tr.p.length<20)return null;const key=tr.d+':'+tr.p.length;if(splitCache.k===key)return splitCache.v;
   const p=tr.p,n=p.length,cum=[0];for(let i=1;i<n;i++)cum.push(cum[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1])/10);const L=cum[n-1]||1;
-  const v=p.map((_,i)=>{let a=0,c=0;for(let j=i-5;j<=i+5;j++)if(j>=0&&j<n){a+=p[j][2];c++}return a/c});
-  let vmax=0,vmin=1e9;v.forEach(x=>{if(x>vmax)vmax=x;if(x<vmin)vmin=x});const out=[],W2=18,depth=Math.max(5,(vmax-vmin)*0.25);
-  if(vmax-vmin>=6)for(let i=1;i<n-1&&out.length<6;i++){let isMin=true,pk=v[i];
-    for(let j=Math.max(0,i-W2);j<=Math.min(n-1,i+W2);j++)if(v[j]<v[i]){isMin=false;break}
-    if(!isMin)continue;for(let j=i;j<=Math.min(n-1,i+80);j++)if(v[j]>pk)pk=v[j];if(pk-v[i]<depth)continue;
-    // uscita di curva: la moto ha ripreso oltre metà della velocità che avrà sul rettilineo
-    let e=i;while(e<n-1&&v[e]<v[i]+0.55*(pk-v[i]))e++;const fr=cum[e]/L;
-    if(fr>0.1&&fr<0.9&&(!out.length||fr-out[out.length-1].f>0.15))out.push({f:fr,i:e});i=e}
-  const res=out.length?out:[{f:1/3,i:cum.findIndex(c=>c>=L/3)},{f:2/3,i:cum.findIndex(c=>c>=2*L/3)}];
-  res.auto=!out.length;splitCache.k=key;splitCache.v=res;return res}
+  // il delta si aggiorna circa ogni 3 s di giro: abbastanza spesso da seguirlo, abbastanza fermo da leggerlo con un'occhiata
+  const ns=Math.max(3,Math.min(12,Math.round((tr.ms||20000)/3000))),res=[];
+  for(let k=1;k<ns;k++){const f=k/ns;res.push({f,i:Math.max(0,cum.findIndex(c=>c>=f*L))})}
+  splitCache.k=key;splitCache.v=res;return res}
 function updateSector(){if(!lt.inLap){dev.sd=null;return}const t=now();
   if(!dev.sd||dev.sd.start!==lt.start){let val=null;const nl=lt.laps.length;
     // al traguardo il numero diventa il distacco finale del giro appena chiuso
     if(nl>=2)val=(lt.lastWasBest?lt.lastMs-lt.prevBest:lt.lastMs-lt.bestMs)/1000;
     dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t}}
-  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track])||[{f:1/3},{f:2/3}],b=lt.best;
+  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track])||[1,2,3,4,5].map(k=>({f:k/6})),b=lt.best;
   if(!lt.deltaValid||b.length<2)return;const tot=b[b.length-1][0];let moved=false;
   while(sd.idx<sp.length&&lt.curDist>=sp[sd.idx].f*tot){sd.idx++;moved=true}
   if(moved){sd.val=lt.delta;sd.pred=lt.bestMs+lt.delta*1000;sd.at=t}}
@@ -165,7 +159,7 @@ function onFix(f){
     if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;
       const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;persist()}
     else if(tk&&!tk.trace){const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr){tk.trace=tr;persist()}}
-    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else{dev.lapHl=now()+3000;dev.lapHold=now()+4000}saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
+    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
 }
 
 let watchId=null;
@@ -502,11 +496,11 @@ function drawRace(){
     else num(gap(g/1000)+' dal migliore',W/2,py+ph-18,22,g>0?C.lossTxt:C.gainTxt,'center',700,W-60);
     bottomCells(cellsY);hits.push({id:'hold',x:0,y:SB,w:W,h:H-SB,act:()=>dev.lapHold=0});return}
   if(view===0&&valid){
-    if(sec){const sp=trackSplits(saved.tracks[dev.track])||[0,0],ns=sp.length+1,age=now()-(sd?sd.at:0);
+    if(sec){const sp=trackSplits(saved.tracks[dev.track])||[0,0,0,0,0],ns=sp.length+1,age=now()-(sd?sd.at:0);
       // il numero resta fermo fino alla prossima uscita di curva; quando cambia, un lampo breve
       if(d!=null&&age<700){cx.globalAlpha=1-age/700;cx.fillStyle=d<0?C.gain:C.loss;cx.globalAlpha*=0.16;cx.fillRect(8,py,W-16,ph);cx.globalAlpha=1}
       panel(8,py,W-16,ph,'Delta',sd&&sd.idx>0?`settore ${sd.idx} di ${ns}`:(d!=null?'al traguardo':null),C.frame);
-      if(d==null){num('—',W/2,mid-10,72,C.faint,'center',700,W-40);txt('Il delta arriva all\'uscita della prima curva',W/2,py+ph-16,15,C.dim,'center',500)}
+      if(d==null){num('—',W/2,mid-10,72,C.faint,'center',700,W-40);txt('Il delta arriva fra pochi secondi',W/2,py+ph-16,15,C.dim,'center',500)}
       else if(Math.abs(d)<0.005)num('0.00',W/2,mid,lost?96:112,C.fg,'center',700,W-40);
       else num(sgn(d),W/2,mid,lost?96:112,dc,'center',700,W-40);
     }else{const tr=deltaTrend();
@@ -643,7 +637,7 @@ function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&
   const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R,sx=X((tk.lon-tr.o[1])*kx),sy=Y((tk.lat-tr.o[0])*ky),h=tk.heading*D2R,dx=Math.sin(h),dy=-Math.cos(h),nx=-dy,ny=dx;
   cx.beginPath();cx.moveTo(sx-nx*13,sy-ny*13);cx.lineTo(sx+nx*13,sy+ny*13);cx.strokeStyle=C.fg;cx.lineWidth=2;cx.stroke();cx.beginPath();cx.arc(sx,sy,5,0,7);cx.fillStyle=C.accent;cx.fill();
   const ax=sx+dx*16,ay=sy+dy*16;cx.beginPath();cx.moveTo(ax+dx*7,ay+dy*7);cx.lineTo(ax-dx*3+nx*5,ay-dy*3+ny*5);cx.lineTo(ax-dx*3-nx*5,ay-dy*3-ny*5);cx.closePath();cx.fillStyle=C.fg;cx.fill();
-  {const sp=trackSplits(tk);if(sp&&!sp.auto)sp.forEach(q=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),5,0,7);cx.fillStyle=C.bg;cx.fill();cx.lineWidth=2;cx.strokeStyle=C.fg;cx.stroke()})}
+  {const sp=trackSplits(tk);if(sp)sp.forEach(q=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),5,0,7);cx.fillStyle=C.bg;cx.fill();cx.lineWidth=2;cx.strokeStyle=C.fg;cx.stroke()})}
   // legenda velocità
   const ly=H-14,lx0=mx+60,lw=mw-120;for(let i=0;i<lw;i+=2){cx.fillStyle=spdCol(i/lw);cx.fillRect(lx0+i,ly-3,2,6)}
   num(Math.round(v0)+'',lx0-8,ly,13,C.dim,'right',600);num(Math.round(v1)+' km/h',lx0+lw+8,ly,13,C.dim,'left',600);
@@ -680,7 +674,7 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
   button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()}});
   y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
-  y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':"cambia all'uscita di ogni curva");
+  y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':'cambia circa ogni 3 secondi');
   segmented('sdm',cx0,y,cw,rh-8,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
   y=row('Decimali dei tempi',(saved.dec===2?'19.75':'19.750')+', il millesimo è indicativo');
   segmented('sdec',cx0,y,cw,rh-8,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
