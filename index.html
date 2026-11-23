@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v22';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v23';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -140,7 +140,7 @@ function onFix(f){
     if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;
       const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;persist()}
     else if(tk&&!tk.trace){const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr){tk.trace=tr;persist()}}
-    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
+    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else{dev.lapHl=now()+3000;dev.lapHold=now()+4000}saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
 }
 
 let watchId=null;
@@ -351,7 +351,9 @@ function segmented(id,x,y,w,h,opts,cur,set){const n=opts.length,sw=w/n;rr(x,y,w,
 const pad2=v=>String(v).padStart(2,'0');
 // tempo sul giro: 1:24.234 (millesimi) oppure 1:24.23 (centesimi) a scelta nelle opzioni
 function fmt(ms){if(!ms&&ms!==0)return'--';ms=Math.max(0,Math.round(ms));const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,
-  fr=saved.dec===2?pad2(Math.floor(ms%1000/10)):String(ms%1000).padStart(3,'0');return m>0?`${m}:${pad2(s)}.${fr}`:`${s}.${fr}`}
+  fr=saved.dec===2?pad2(Math.floor(ms%1000/10)):String(ms%1000).padStart(3,'0');
+  if(saved.tfmt==='apex')return m>0?`${m}'${pad2(s)}"${fr}`:`${s}"${fr}`;
+  return m>0?`${m}:${pad2(s)}.${fr}`:`${s}.${fr}`}
 // tempo che scorre in gara: decimi, così le cifre non "frullano"
 const fmt1=ms=>{ms=Math.max(0,ms);const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,d=Math.floor(ms%1000/100);return m>0?`${m}:${pad2(s)}.${d}`:`${s}.${d}`};
 // distacco tra giri chiusi, con la stessa precisione dei tempi
@@ -464,6 +466,13 @@ function drawRace(){
   const view=saved.view,cellsY=184,valid=lt.deltaValid,d=lt.delta,dc=d<0?C.gainTxt:C.lossTxt;
   ledBar(top+6,d,valid);
   const py=top+28,ph=cellsY-py,mid=py+ph/2+4;
+  // tempo appena fatto, fermo per 4 s (come i cronometri da pista); poi torna il delta. Un tocco lo chiude subito.
+  if(now()<dev.lapHold&&n){const first=n===1,g=lt.lastMs-lt.bestMs;
+    panel(8,py,W-16,ph,`Giro ${n}`,first?'riferimento':null,C.frame);
+    num(fmt(lt.lastMs),W/2,mid-10,lost?84:100,C.fg,'center',700,W-40);
+    if(first)txt('Primo giro: da qui parte il confronto',W/2,py+ph-18,15,C.dim,'center',600);
+    else num(gap(g/1000)+' dal migliore',W/2,py+ph-18,22,g>0?C.lossTxt:C.gainTxt,'center',700,W-60);
+    bottomCells(cellsY);hits.push({id:'hold',x:0,y:SB,w:W,h:H-SB,act:()=>dev.lapHold=0});return}
   if(view===0&&valid){
     const tr=deltaTrend();
     panel(8,py,W-16,ph,'Delta',Math.abs(tr)>0.04?(tr<0?'In recupero':'In perdita'):null,C.frame);
@@ -614,7 +623,7 @@ function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condivi
 
 // ---------- opzioni ----------
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+41,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?7:6,ah=H-top,content=nRows*rh+4;
+  const top=SB+41,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?8:7,ah=H-top,content=nRows*rh+4;
   const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
   const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
     if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
@@ -630,6 +639,8 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
   y=row('Decimali dei tempi',(saved.dec===2?'19.75':'19.750')+', il millesimo è indicativo');
   segmented('sdec',cx0,y,cw,rh-8,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
+  y=row('Formato dei tempi',saved.tfmt==='apex'?'stile cronometrista':'stile digitale');
+  segmented('sfmt',cx0,y,cw,rh-8,saved.dec===2?[['1:41.58','dot'],["1'41\"58",'apex']]:[['1:41.580','dot'],["1'41\"580",'apex']],saved.tfmt==='apex'?'apex':'dot',v=>{saved.tfmt=v;persist()});
   y=row('Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
   y=row('Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
   segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
