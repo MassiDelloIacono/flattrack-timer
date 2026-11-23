@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v31';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v32';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -702,7 +702,9 @@ function autoScreens(){const s=dev.screen;
   if(dev.lastT&&now()-dev.lastPerf>4000)dev.fix=false;     // nessun punto GPS da 4 s
   if(s==='boot'&&dev.fix)dev.screen=dev.speed>15?'race':'ready';
   if(['ready','laps','settings','tracks','trackmap'].includes(s)&&dev.speed>15&&dev.fix)dev.screen='race';
-  if(s==='race'){if(dev.fix&&dev.speed<3){if(dev.stillSince==null)dev.stillSince=now();else if(now()-dev.stillSince>3000){dev.screen='ready';dev.stillSince=null}}else dev.stillSince=null}
+  if(s==='race'){if(dev.fix&&dev.speed<3){if(dev.stillSince==null)dev.stillSince=now();else if(now()-dev.stillSince>3000){dev.screen='ready';dev.stillSince=null;
+    // fermo: il giro in corso si annulla (non conta la sosta); quando riparti il giro nuovo parte dal traguardo
+    if(lt.inLap){lt.inLap=false;lt.deltaValid=false;dev.lapPts=[];dev.sd=null;toast('Fermo: giro in corso annullato')}}}else dev.stillSince=null}
   if(s==='wizard'&&dev.wiz===3&&now()-dev.wizDoneAt>2500)dev.screen=dev.speed>15?'race':'ready'}
 
 // ===================== tocco =====================
