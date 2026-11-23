@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v49';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v50';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -708,7 +708,7 @@ function drawSecControls(tk,x,y,w){const n=secCount(tk),F=secFracs(tk),eq=eqSpli
   num(String(n),x+w/2,y+26,22,C.fg,'center',700);
   button('secUp',x+w-40,y+10,40,32,'',{icon:'up',disabled:n>=SEC_MAX,act:()=>setSecs(tk,n+1)});
   if(manual)button('secEq',x,y+50,w,28,'Rimetti uguali',{ghost:true,size:13,act:()=>setSecs(tk,n)});
-  else txt('Tocca la pista per spostare',x,y+60,11,C.faint,'left',500)}
+  else txt('Trascina i pallini sulla pista',x,y+60,11,C.faint,'left',500)}
 function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
   header(tk?tk.name:'Pista',()=>dev.screen='tracks',tr?'registrata il '+new Date(tr.d).toLocaleDateString('it-IT',{day:'numeric',month:'short'}):'');
   const top=SB+44;
@@ -726,8 +726,9 @@ function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&
   const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R,sx=X((tk.lon-tr.o[1])*kx),sy=Y((tk.lat-tr.o[0])*ky),h=tk.heading*D2R,dx=Math.sin(h),dy=-Math.cos(h),nx=-dy,ny=dx;
   cx.beginPath();cx.moveTo(sx-nx*13,sy-ny*13);cx.lineTo(sx+nx*13,sy+ny*13);cx.strokeStyle=C.fg;cx.lineWidth=2;cx.stroke();cx.beginPath();cx.arc(sx,sy,5,0,7);cx.fillStyle=C.accent;cx.fill();
   const ax=sx+dx*16,ay=sy+dy*16;cx.beginPath();cx.moveTo(ax+dx*7,ay+dy*7);cx.lineTo(ax-dx*3+nx*5,ay-dy*3+ny*5);cx.lineTo(ax-dx*3-nx*5,ay-dy*3-ny*5);cx.closePath();cx.fillStyle=C.fg;cx.fill();
-  {const sp=trackSplits(tk);sp.forEach((q,k)=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),9,0,7);cx.fillStyle=C.fg;cx.fill();
+  const sp=trackSplits(tk);{sp.forEach((q,k)=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),9,0,7);cx.fillStyle=C.fg;cx.fill();
     num(String(k+1),X(pt[0]),Y(pt[1])+0.5,12,C.bg,'center',700)})}
+  dev.mapGeo={tk,P,X,Y,cum:traceCum(tk.trace),pts:sp.map(q=>{const pt=P[Math.min(P.length-1,q.i)];return pt?[X(pt[0]),Y(pt[1])]:null})};
   // tocco sulla pista: il confine più vicino si sposta lì
   hits.push({id:'secMove',x:mx,y:my,w:mw,h:mh,act:()=>moveSecBoundary(tk,P,X,Y)});
   // legenda velocità
@@ -835,14 +836,21 @@ let lastPt={x:0,y:0};
 let instEvt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEvt=e});window.addEventListener('appinstalled',()=>{instEvt=null});
 const pt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}};
 const hitAt=p=>{for(let i=hits.length-1;i>=0;i--){const h=hits[i];if(p.x>=h.x&&p.x<=h.x+h.w&&p.y>=h.y&&p.y<=h.y+h.h)return h}return null};
+// mappa della pista: un pallino si trascina lungo il tracciato con il dito
+function secDragStart(p){const g=dev.mapGeo;if(dev.screen!=='trackmap'||!g)return false;let k=-1,bd=26;
+  g.pts.forEach((q,i)=>{if(q){const d=Math.hypot(q[0]-p.x,q[1]-p.y);if(d<bd){bd=d;k=i}}});if(k<0)return false;dev.secDrag={k,moved:false};return true}
+function secDragMove(p){const g=dev.mapGeo,sd=dev.secDrag;if(!g||!sd)return;let bj=0,bd=1e9;g.P.forEach((q,j)=>{const d=Math.hypot(g.X(q[0])-p.x,g.Y(q[1])-p.y);if(d<bd){bd=d;bj=j}});
+  const L=g.cum[g.cum.length-1]||1,F=secFracs(g.tk).slice(),lo=sd.k?F[sd.k-1]+0.03:0.03,hi=sd.k<F.length-1?F[sd.k+1]-0.03:0.97;
+  F[sd.k]=Math.max(lo,Math.min(hi,g.cum[bj]/L));g.tk.sec={n:secCount(g.tk),f:F};sd.moved=true}
 cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}
+  if(secDragStart(p))return;
   const z=scrollZone;drag=null;if(z&&z.max>0&&p.x>=z.x&&p.x<=z.x+z.w&&p.y>=z.y&&p.y<=z.y+z.h){dev[z.key+'V']=0;drag={key:z.key,max:z.max,y0:p.y,s0:dev[z.key]||0,on:false,ly:p.y,lt:performance.now(),v:0}}});
-cv.addEventListener('pointermove',e=>{if(!drag)return;const p=pt(e),dy=p.y-drag.y0;if(!drag.on&&Math.abs(dy)>6){drag.on=true;pressed=null}
+cv.addEventListener('pointermove',e=>{if(dev.secDrag){secDragMove(pt(e));return}if(!drag)return;const p=pt(e),dy=p.y-drag.y0;if(!drag.on&&Math.abs(dy)>6){drag.on=true;pressed=null}
   if(drag.on){const t=performance.now(),dt=Math.max(1,t-drag.lt);drag.v=0.6*drag.v+0.4*(-(p.y-drag.ly)/dt*16.7);drag.ly=p.y;drag.lt=t;
     dev[drag.key]=Math.max(0,Math.min(drag.max,drag.s0-dy))}});
-cv.addEventListener('pointerup',e=>{lastPt=pt(e);if(drag&&drag.on){if(performance.now()-drag.lt<80)dev[drag.key+'V']=drag.v;drag=null;pressed=null;return}drag=null;
+cv.addEventListener('pointerup',e=>{lastPt=pt(e);if(dev.secDrag){const m=dev.secDrag.moved,k=dev.secDrag.k;dev.secDrag=null;if(m){persist();toast(`Fine del settore ${k+1} spostata`)}pressed=null;return}if(drag&&drag.on){if(performance.now()-drag.lt<80)dev[drag.key+'V']=drag.v;drag=null;pressed=null;return}drag=null;
   const h=hitAt(pt(e));if(h&&h.id===pressed){if(h.dis){if(h.id==='wok')toast(dev.speed>5?'Prima fermati':'Aspetta il GPS')}else if(h.act){h.act()}}pressed=null;setTimeout(goFull,50)});
-cv.addEventListener('pointercancel',()=>{pressed=null;drag=null});
+cv.addEventListener('pointercancel',()=>{pressed=null;drag=null;if(dev.secDrag){dev.secDrag=null;persist()}});
 
 // ===================== avvio =====================
 resize();keepAwake();
