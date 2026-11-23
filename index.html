@@ -58,7 +58,7 @@ class LapTimer{
   constructor(){this.minLapMs=8000;this.line=null;this.resetSession();this.havePrev=false}
   setLine(l){this.line={...l};const h=l.heading*D2R;this.dx=Math.sin(h);this.dy=Math.cos(h);this.nx=Math.cos(h);this.ny=-Math.sin(h);this.havePrev=false;this.inLap=false}
   clearLine(){this.line=null;this.havePrev=false;this.inLap=false}
-  resetSession(){this.prevBest=0;this.inLap=false;this.tr=[];this.best=[];this.laps=[];this.bestMs=0;this.bestNo=0;this.lastMs=0;this.lastWasBest=false;this.deltaValid=false;this.delta=0;this.curDist=0}
+  resetSession(){this.prevBest=0;this.inLap=false;this.tr=[];this.best=[];this.laps=[];this.bestMs=0;this.bestNo=0;this.lastMs=0;this.lastWasBest=false;this.deltaValid=false;this.delta=0;this.curDist=0;this.ends=[]}
   crosses(x1,y1,x2,y2){const L=this.line,half=L.width/2,ax=L.x-this.nx*half,ay=L.y-this.ny*half,sx=this.nx*L.width,sy=this.ny*L.width,rx=x2-x1,ry=y2-y1;
     if(rx*this.dx+ry*this.dy<=0)return -1;const den=rx*sy-ry*sx;if(Math.abs(den)<1e-9)return -1;const qx=ax-x1,qy=ay-y1;const t=(qx*sy-qy*sx)/den,u=(qx*ry-qy*rx)/den;return(t>=0&&t<=1&&u>=0&&u<=1)?t:-1}
   update(f){if(!f.valid||!this.line){this.havePrev=false;return false}let done=false;
@@ -76,19 +76,35 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v32';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v33';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
 const newTrackName=()=>{let k=saved.tracks.length+1;while(saved.tracks.some(t=>t.name==='Pista '+k))k++;return'Pista '+k};
 const trackName=()=>dev.track>=0&&saved.tracks[dev.track]?saved.tracks[dev.track].name:'';
-function useTrack(i){const tk=saved.tracks[i];if(!tk)return;if(!origin)origin={lat:tk.lat,lon:tk.lon};const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i}
+function useTrack(i){const tk=saved.tracks[i];if(!tk)return;if(!origin)origin={lat:tk.lat,lon:tk.lon};const q=toLocal(tk.lat,tk.lon);lt.setLine({x:q.x,y:q.y,heading:tk.heading,width:tk.width});dev.track=i;if(saved.lastTrack!==i){saved.lastTrack=i;persist()}applyMinLap()}
 
 if(!saved.viewFix){saved.view=0;saved.viewFix=1;persist()}
 const lt=new LapTimer();lt.minLapMs=saved.minLap*1000;
+// ---------- turni e giornate ----------
+// un turno nuovo quando fra la fine di un giro e l'inizio del successivo passano più di 2 minuti (sosta ai box)
+const TURN_GAP=120000;
+function turnsOf(L,E){const out=[];for(let i=0;i<L.length;i++){const st=E&&E[i]?E[i]-L[i]:null,prev=E&&i?E[i-1]:null;
+  if(!out.length||(st!=null&&prev!=null&&st-prev>TURN_GAP))out.push([]);out[out.length-1].push(i)}return out}
+const dayKey=d=>{const x=new Date(d);return x.getFullYear()+'-'+(x.getMonth()+1)+'-'+x.getDate()};
+// la giornata finita va nell'archivio: si salva da sola, nessun pulsante da ricordare
+function archiveSession(){const S=saved.session;if(!S||!S.laps||!S.laps.length)return false;
+  (saved.days||(saved.days=[])).unshift({date:S.date,track:S.trackName||((saved.tracks[S.track]||{}).name)||'Pista',laps:S.laps.slice(),ends:(S.ends||[]).slice()});
+  if(saved.days.length>300)saved.days.length=300;saved.session=null;persist();return true}
+if(saved.session&&saved.session.laps&&saved.session.laps.length&&dayKey(saved.session.date)!==dayKey(Date.now()))archiveSession();
 if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.session.laps;lt.laps=L.slice();lt.lastMs=L[L.length-1];
+  lt.ends=L.map((_,i)=>(saved.session.ends||[])[i]||null);
   L.forEach((ms,i)=>{if(!lt.bestMs||ms<lt.bestMs){lt.bestMs=ms;lt.bestNo=i+1}})}
-const saveSession=()=>{saved.session={laps:lt.laps,track:dev.track,date:new Date().toISOString()};persist()};
+const saveSession=()=>{saved.session={laps:lt.laps,ends:lt.ends,track:dev.track,trackName:trackName(),date:new Date().toISOString()};persist()};
+function closeDay(){saveSession();const ok=archiveSession();lt.resetSession();saveSession();return ok}
+// giro minimo: in automatico metà del record di quella pista (ovale e TT hanno valori diversi da soli)
+function effMinLap(){const tk=saved.tracks[dev.track];if(saved.minLapAuto!==false&&tk&&tk.record)return Math.max(4,Math.round(tk.record*0.5/1000));return saved.minLap}
+function applyMinLap(){lt.minLapMs=effMinLap()*1000}
 
 const dev={sats:0,fix:false,hAcc:99,speed:0,gps:null,screen:'boot',wiz:0,pend:null,flashUntil:0,stillSince:null,toast:null,toastUntil:0,scroll:0,track:-1,
   lastT:0,lastPerf:0,battery:null,charging:false,geoErr:null,prev:null,lastHd:0,startedAt:performance.now()};
@@ -137,6 +153,8 @@ function onFix(f){
   dev.gps=f;
   if(f.valid&&!lt.line&&dev.screen!=='wizard'){
     let bi=-1,bd=1500;saved.tracks.forEach((tk,i)=>{const d=hav(tk.lat,tk.lon,f.lat,f.lon);if(d<bd){bd=d;bi=i}});
+    // varianti nello stesso posto: vince l'ultima usata
+    const lu=saved.tracks[saved.lastTrack];if(bi>=0&&lu&&hav(lu.lat,lu.lon,f.lat,f.lon)<1500)bi=saved.lastTrack;
     if(bi>=0){useTrack(bi);toast(saved.tracks[bi].name+' riconosciuta')}}
   const dPend=dev.pend?hav(f.lat,f.lon,dev.pend.lat,dev.pend.lon):0;
   if(dev.screen==='wizard'&&dev.wiz===2&&f.valid&&dPend>=8&&f.speedKmh>8){
@@ -144,7 +162,7 @@ function onFix(f){
     if(dPend<60){const q0=toLocal(dev.pend.lat,dev.pend.lon),hd=(Math.atan2(f.x-q0.x,f.y-q0.y)/D2R+360)%360;
       const tk={lat:dev.pend.lat,lon:dev.pend.lon,heading:hd,width:30};
       // stessa pista (entro 300 m): aggiorno il suo traguardo e tengo nome e record; altrimenti pista nuova
-      let i=saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);
+      const wp=saved.tracks[dev.wizPrev];let i=wp&&hav(wp.lat,wp.lon,tk.lat,tk.lon)<300?dev.wizPrev:saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);
       if(i<0){tk.name=newTrackName();tk.created=Date.now();saved.tracks.push(tk);i=saved.tracks.length-1;dev.wizNew=true}
       else{saved.tracks[i]={...saved.tracks[i],lat:tk.lat,lon:tk.lon,heading:hd};dev.wizNew=false}
       persist();useTrack(i);dev.wiz=3;dev.wizDoneAt=now()}
@@ -155,9 +173,9 @@ function onFix(f){
   if(!lt.inLap)dev.lapPts=[];else if(f.valid)(dev.lapPts||(dev.lapPts=[])).push([f.lat,f.lon,f.speedKmh]);
   {const Hd=dev.dHist||(dev.dHist=[]);if(lt.deltaValid){Hd.push([f.t,lt.delta]);while(Hd.length&&f.t-Hd[0][0]>2500)Hd.shift()}else Hd.length=0}
   updateSector();
-  if(lapDone){const tk=saved.tracks[dev.track];dev.trackRec=false;
+  if(lapDone){lt.ends.push(Date.now());const tk=saved.tracks[dev.track];dev.trackRec=false;
     if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;
-      const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;persist()}
+      const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;applyMinLap();persist()}
     else if(tk&&!tk.trace){const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr){tk.trace=tr;persist()}}
     const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
 }
@@ -328,6 +346,7 @@ const mix=(a,b,k)=>{const p=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)),A=p(a)
 // ---------- icone vettoriali (riquadro s×s centrato in x,y) ----------
 function icon(name,x,y,s,col){cx.save();cx.translate(x,y);cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=Math.max(1.6,s/9);cx.lineCap='round';cx.lineJoin='round';const h=s/2;cx.beginPath();
   switch(name){
+    case'copy':cx.strokeRect(-h*0.75,-h*0.45,h*1.1,h*1.2);cx.beginPath();cx.moveTo(-h*0.35,-h*0.75);cx.lineTo(h*0.75,-h*0.75);cx.lineTo(h*0.75,h*0.4);cx.stroke();break;
     case'laps':for(let i=-1;i<=1;i++){cx.moveTo(-h*0.35,i*h*0.6);cx.lineTo(h,i*h*0.6);cx.moveTo(-h,i*h*0.6);cx.arc(-h*0.8,i*h*0.6,1,0,7)}cx.stroke();break;
     case'pin':cx.arc(0,-h*0.25,h*0.55,Math.PI*0.85,Math.PI*2.15);cx.lineTo(0,h);cx.closePath();cx.stroke();cx.beginPath();cx.arc(0,-h*0.25,h*0.18,0,7);cx.fill();break;
     case'gear':for(let i=0;i<8;i++){const a=i*Math.PI/4;cx.moveTo(Math.cos(a)*h*0.62,Math.sin(a)*h*0.62);cx.lineTo(Math.cos(a)*h*0.95,Math.sin(a)*h*0.95)}cx.stroke();cx.beginPath();cx.arc(0,0,h*0.6,0,7);cx.stroke();cx.beginPath();cx.arc(0,0,h*0.22,0,7);cx.stroke();break;
@@ -444,18 +463,18 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     txt(lt.inLap?'Il tempo riprende appena superi i 15 km/h':'Il cronometro parte da solo',W/2,top+84,14,C.dim,'center',500);
     const pw=(W-28)/2,py=top+128,ph=bot-py-10;
     panel(10,py,pw,ph,'Record della pista');num(tk&&tk.record?fmt(tk.record):'--',10+pw/2,py+ph/2+2,30,tk&&tk.record?C.gainTxt:C.faint,'center',700);
-    panel(18+pw,py,pw,ph,'Giro minimo');num(saved.minLap+' s',18+pw*1.5,py+ph/2+2,30,C.fg,'center',700)}
+    panel(18+pw,py,pw,ph,'Giro minimo');num(effMinLap()+' s',18+pw*1.5,py+ph/2+2,30,C.fg,'center',700)}
   else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs;
     const py=top+16,ph=104,map=tk&&tk.trace&&W>=440,mw=map?Math.min(170,W*0.3):0,nx=16;
-    panel(10,py,W-20,ph,'Miglior giro',`giro ${lt.bestNo}`);
+    panel(10,py,W-20,ph,'Miglior giro',lapLabel(lt.bestNo-1,lt.laps,lt.ends));
     if(map){cx.fillStyle=C.line;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20);
       hits.push({id:'heroMap',x:W-24-mw,y:py,w:mw+14,h:ph,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
     num(fmt(lt.bestMs),nx,py+ph/2+(rec?-6:2),rec?66:76,C.gainTxt,'left',700,W-60-mw);
     if(rec){txt('Record della pista',nx,py+ph-14,12,C.dim,'left',600);num(fmt(tk.record),nx+112,py+ph-14,15,C.fg,'left',700)}
-    const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg]];
+    const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg]],nT=turnsOf(lt.laps,lt.ends).length;
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-16)/3;
     cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
-      panel(x,cy,pw,chh,l,null,C.line);if(g){cx.font=FL(12,600);txt(g,x+6+cx.measureText(l).width+8,cy+4,12,C.lossTxt,'left',700)}
+      panel(x,cy,pw,chh,l,k===2&&nT>1?`${nT} turni`:null,C.line);if(g){cx.font=FL(12,600);txt(g,x+6+cx.measureText(l).width+8,cy+4,12,C.lossTxt,'left',700)}
       num(v,x+6,cy+chh/2+4,28,c,'left',700,pw-16)})}
   tabBar()}
 
@@ -532,25 +551,61 @@ function listArea(key,x,y,w,h,content){const max=Math.max(0,content-h);let v=dev
 function endList(key,x,y,w,h,content){cx.restore();const max=Math.max(0,content-h);if(!max)return;
   const bh=Math.max(18,h*h/content),by=y+(h-bh)*(dev[key]/max);rr(x+w-4,by,3,bh,1.5,C.faint)}
 
-// ---------- giri ----------
-function drawLaps(){statusBar('','');const L=lt.laps,n=L.length;
-  header(n?(n===1?'1 giro':`${n} giri`):'Giri',()=>dev.screen='ready','');
-  if(n){cx.font=FL(20,700);const tw=cx.measureText(n===1?'1 giro':`${n} giri`).width;txt(`media ${fmt(L.reduce((a,b)=>a+b,0)/n)}`,58+tw,SB+21,13,C.dim,'left',500)}
-  button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:shareLaps});
+// ---------- giri, divisi per turno ----------
+function lapLabel(i,L,E){const T=turnsOf(L,E);if(T.length<2)return`giro ${i+1}`;for(let k=0;k<T.length;k++){const j=T[k].indexOf(i);if(j>=0)return`turno ${k+1}, giro ${j+1}`}return''}
+function lapList(L,E,key,live){const n=L.length,T=turnsOf(L,E),top=SB+41,ah=H-top,hh=34,rh=28;let bi=0;L.forEach((ms,i)=>{if(ms<L[bi])bi=i});
+  // dal turno più recente; dentro ogni turno dall'ultimo giro
+  const rows=[];for(let k=T.length-1;k>=0;k--){rows.push({h:k});for(let j=T[k].length-1;j>=0;j--)rows.push({i:T[k][j],j})}
+  const content=rows.reduce((a,r)=>a+(r.h!=null?hh:rh),0),off=listArea(key,0,top,W,ah,content);let y=top-off;
+  for(const r of rows){const h=r.h!=null?hh:rh;if(y+h>=top&&y<=H){const cy=y+h/2;
+    if(r.h!=null){const t=T[r.h],tl=t.map(i=>L[i]),tb=Math.min(...tl),avg=tl.reduce((a,b)=>a+b,0)/tl.length;
+      cx.fillStyle=C.surface;cx.fillRect(0,y,W,h);txt(T.length>1?`Turno ${r.h+1}`:'Turno unico',14,cy,15,C.fg,'left',700);
+      const st=E&&E[t[0]]?new Date(E[t[0]]-L[t[0]]):null;cx.font=FL(15,700);const lw=cx.measureText(T.length>1?`Turno ${r.h+1}`:'Turno unico').width;
+      if(st)txt(st.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),24+lw,cy+1,12,C.faint,'left',500);
+      num(fmt(tb),W-14,cy,16,C.fg,'right',700);cx.font=FN(16,700);const bw=numMetrics(fmt(tb),16,700).tot;
+      txt('migliore',W-22-bw,cy+1,12,C.dim,'right',500);
+      const mx=W-30-bw-cx.measureText('migliore').width-16;num(fmt(avg),mx,cy,16,C.fg,'right',700);const aw=numMetrics(fmt(avg),16,700).tot;
+      txt('media',mx-8-aw,cy+1,12,C.dim,'right',500);txt(tl.length===1?'1 giro':`${tl.length} giri`,W/2-60,cy+1,13,C.dim,'right',600)}
+    else{const i=r.i,ms=L[i],isB=i===bi;
+      if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,h)}
+      num(String(r.j+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
+      if(live&&i===n-1&&!isB){const tw=numMetrics(fmt(ms),21,700).tot;txt('ultimo',58+tw,cy+1,12,C.faint,'left',500)}
+      if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-L[bi])/1000),W-14,cy,17,C.lossTxt,'right',600);
+      hline(12,y+h-1,W-24,C.line)}}
+    y+=h}
+  endList(key,0,top,W,ah,content)}
+function drawLaps(){statusBar('','');const L=lt.laps,n=L.length,T=turnsOf(L,lt.ends);
+  header(n?(n===1?'1 giro':`${n} giri`):'Oggi',()=>dev.screen='ready','');
+  if(n>1&&T.length>1){cx.font=FL(20,700);const tw=cx.measureText(`${n} giri`).width;txt(`in ${T.length} turni`,58+tw,SB+21,13,C.dim,'left',500)}
+  const nd=(saved.days||[]).length;
+  button('days',W-200,SB+5,112,30,nd?`Giornate ${nd}`:'Giornate',{ghost:true,size:14,act:openDays});
+  button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(L,lt.ends,trackName(),Date.now())});
   button('reset',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')}});
-  const top=SB+41,rh=28,ah=H-top;
-  if(!n){icon('laps',W/2,top+48,24,C.faint);txt('Ancora nessun giro',W/2,top+78,16,C.dim,'center',600);scrollZone=null;return}
-  const off=listArea('scroll',0,top,W,ah,n*rh),bestMs=lt.bestMs;
-  for(let r=0;r<n;r++){const y=top+r*rh-off;if(y+rh<top||y>H)continue;const i=n-1-r,ms=L[i],isB=i+1===lt.bestNo,cy=y+rh/2;
-    if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,rh)}
-    num(String(i+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
-    if(i===n-1&&!isB){const tw=numMetrics(fmt(ms),21,700).tot;txt('ultimo',58+tw,cy+1,12,C.faint,'left',500)}
-    if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-bestMs)/1000),W-14,cy,17,C.lossTxt,'right',600);
-    hline(12,y+rh-1,W-24,C.line)}
-  endList('scroll',0,top,W,ah,n*rh)}
-
+  if(!n){const top=SB+41;icon('laps',W/2,top+48,24,C.faint);txt('Ancora nessun giro oggi',W/2,top+78,16,C.dim,'center',600);
+    txt('I turni si separano da soli quando ti fermi più di 2 minuti',W/2,top+100,13,C.faint,'center',500);scrollZone=null;return}
+  lapList(L,lt.ends,'scroll',true)}
+// ---------- archivio delle giornate ----------
+const dayName=d=>new Date(d).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+function openDays(){dev.screen='days';dev.dyscroll=0;dev.dyscrollV=0}
+function drawDays(){statusBar('','');const D=saved.days||[],n=D.length;header('Giornate',()=>dev.screen='laps','');
+  const top=SB+41,rh=46,ah=H-top;
+  if(!n){scrollZone=null;icon('laps',W/2,top+44,24,C.faint);txt('Nessuna giornata salvata',W/2,top+74,16,C.fg,'center',600);
+    txt('A fine giornata i giri finiscono qui da soli, divisi per turno',W/2,top+96,13,C.dim,'center',500);return}
+  const off=listArea('dyscroll',0,top,W,ah,n*rh);
+  for(let i=0;i<n;i++){const d=D[i],y=top+i*rh-off;if(y+rh<top||y>H)continue;const cy=y+rh/2,b=Math.min(...d.laps),T=turnsOf(d.laps,d.ends).length;
+    const nm=dayName(d.date);txt(nm.charAt(0).toUpperCase()+nm.slice(1),14,cy-8,16,C.fg,'left',600);
+    txt(`${d.track}, ${T===1?'1 turno':T+' turni'}, ${d.laps.length===1?'1 giro':d.laps.length+' giri'}`,14,cy+10,12,C.dim,'left',500);
+    num(fmt(b),W-14,cy,20,C.gainTxt,'right',700);hline(12,y+rh-1,W-24,C.line);
+    const vy=Math.max(y,top),vh=Math.min(y+rh,H)-vy;if(vh>4)hits.push({id:'day'+i,x:0,y:vy,w:W,h:vh,act:()=>{dev.dayIdx=i;dev.screen='day';dev.dscroll=0;dev.dscrollV=0}})}
+  endList('dyscroll',0,top,W,ah,n*rh)}
+function drawDay(){statusBar('','');const d=(saved.days||[])[dev.dayIdx];if(!d){dev.screen='days';return}
+  const nm=new Date(d.date).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});header(nm,()=>dev.screen='days','');
+  cx.font=FL(20,700);txt(d.track,58+cx.measureText(nm).width,SB+21,13,C.dim,'left',500);
+  button('dshare',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(d.laps,d.ends,d.track,d.date)});
+  button('ddel',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDayDel'});
+  lapList(d.laps,d.ends,'dscroll',false)}
 // ---------- procedura traguardo ----------
-function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
+function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}dev.wizPrev=dev.track;lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
 function drawWizard(){statusBar('','');
   header('Imposta traguardo',()=>{dev.screen='ready';dev.wiz=0},dev.wiz<3?`passo ${dev.wiz} di 2`:'');
   const top=SB+44;
@@ -576,6 +631,10 @@ function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i]
   const close=()=>{r.style.display='none';inp.blur()};
   $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
   $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
+// variante: stesso traguardo, record e tracciato suoi (es. ovale e TT nello stesso impianto)
+function addVariant(i){const t=saved.tracks[i];if(!t)return;let k=2;while(saved.tracks.some(o=>o.name===`${t.name} ${k}`))k++;
+  const v={lat:t.lat,lon:t.lon,heading:t.heading,width:t.width,name:`${t.name} ${k}`.slice(0,24),created:Date.now()};
+  saved.tracks.splice(i+1,0,v);if(dev.track>i)dev.track++;if(saved.lastTrack>i)saved.lastTrack++;dev.tsel=i+1;persist();toast('Variante creata: rinominala e poi Usa')}
 function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
   header('Piste',()=>dev.screen='ready','');
   if(n){cx.font=FL(20,700);txt(n===1?'1 salvata':`${n} salvate`,58+cx.measureText('Piste').width,SB+21,13,C.dim,'left',500)}
@@ -588,7 +647,7 @@ function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
     if(sel){cx.fillStyle=C.selWash;cx.fillRect(0,y,W,rh)}
     const dist=dev.gps&&dev.gps.lat?hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon):null;
     const ds=dist==null?'':dist<1000?`${Math.round(dist)} m`:`${(dist/1000).toFixed(dist<10000?1:0)} km`;
-    const colRec=sel?W-136:W-74;
+    const colRec=sel?W-176:W-74;
     num(t.record?fmt(t.record):'--',colRec,cy,18,t.record?C.gainTxt:C.faint,'right',700);
     if(!sel)txt(ds,W-14,cy,13,C.dim,'right',500);
     const maxName=colRec-86-14;let nm=t.name;cx.font=FL(16,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
@@ -596,7 +655,8 @@ function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
     hline(12,y+rh-1,W-24,C.line);const vy=Math.max(y,top),vh=Math.min(y+rh,top+ah)-vy;if(vh>4)hits.push({id:'trow'+i,x:0,y:vy,w:W,h:vh,act:()=>dev.tsel=i});
     if(sel&&y>=top-2&&y+rh<=top+ah+2)acts.push(y)}
   if(n)endList('tscroll',0,top,W,ah,n*rh);
-  acts.forEach(y=>{button('tmap',W-124,y+2,36,rh-4,'',{ghost:true,icon:'map',act:()=>{dev.screen='trackmap'}});
+  acts.forEach(y=>{button('tvar',W-164,y+2,36,rh-4,'',{ghost:true,icon:'copy',act:()=>addVariant(dev.tsel)});
+    button('tmap',W-124,y+2,36,rh-4,'',{ghost:true,icon:'map',act:()=>{dev.screen='trackmap'}});
     button('tren',W-84,y+2,36,rh-4,'',{ghost:true,icon:'edit',act:()=>openRename(dev.tsel)});
     button('tdel',W-44,y+2,36,rh-4,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDel'})});
   const ok=dev.tsel>=0&&dev.tsel<n,inUse=ok&&dev.tsel===dev.track;
@@ -653,14 +713,16 @@ function drawConfirm(title,sub,yesLbl,act,back='ready'){statusBar('','');
   button('no',W/2-bw-6,H-60,bw,40,'Annulla',{ghost:true,act:()=>dev.screen=back,size:16});
   button('yes',W/2+6,H-60,bw,40,yesLbl,{danger:true,act,size:16})}
 
-function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condividere');return}
-  const lines=[`ApexLap, ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Miglior giro: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
+function shareLaps(L,E,track,date){if(!L.length){toast('Nessun giro da condividere');return}
+  let bi=0;L.forEach((ms,i)=>{if(ms<L[bi])bi=i});const T=turnsOf(L,E),out=[`ApexLap, ${dayName(date)}`,track||'Pista',`Miglior giro: ${fmt(L[bi])} (${lapLabel(bi,L,E)})`];
+  T.forEach((t,k)=>{const tl=t.map(i=>L[i]);out.push('',T.length>1?`Turno ${k+1}: ${tl.length} giri, migliore ${fmt(Math.min(...tl))}`:`${tl.length} giri`);tl.forEach((ms,j)=>out.push(`${j+1}\t${fmt(ms)}`))});
+  const lines=out.join('\n');
   if(navigator.share)navigator.share({title:'Giri',text:lines}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 // ---------- opzioni ----------
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+41,rh=36,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?9:8,ah=H-top,content=nRows*rh+4;
+  const top=SB+41,rh=36,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?10:9,ah=H-top,content=nRows*rh+4;
   const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
   const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
     if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
@@ -669,10 +731,13 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
     v=>{if(v==='ble'&&saved.source==='ble'){bleConnect();return}if(saved.source!==v){setSource(v);resize()}});
   if(ext){y=row('Frequenza GPS esterno','25 Hz usa solo i satelliti GPS');
     segmented('sext',cx0,y,cw,rh-8,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
-  y=row('Giro minimo','sotto, il passaggio viene ignorato');
-  button('dmin',cx0,y,44,rh-8,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);lt.minLapMs=saved.minLap*1000;persist()}});
+  {const tk=saved.tracks[dev.track],auto=saved.minLapAuto!==false;
+  y=row('Giro minimo',auto?(tk&&tk.record?`metà del record di questa pista: ${effMinLap()} s`:'metà del record della pista'):'uguale per tutte le piste');
+  segmented('sminA',cx0,y,cw,rh-8,[['Auto',1],['Manuale',0]],auto?1:0,v=>{saved.minLapAuto=!!v;applyMinLap();persist()});
+  y=row(auto?'Giro minimo senza record':'Giro minimo manuale','sotto, il passaggio viene ignorato')}
+  button('dmin',cx0,y,44,rh-8,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);applyMinLap();persist()}});
   num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
-  button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()}});
+  button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}});
   y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
   y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':'cambia circa ogni 3 secondi');
   segmented('sdm',cx0,y,cw,rh-8,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
@@ -691,9 +756,10 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
 function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
   const s=dev.screen;
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
-  else if(s==='wizard')drawWizard();else if(s==='trackmap')drawTrackMap();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();
-  else if(s==='confirmReset')drawConfirm('Azzerare la sessione?',`${lt.laps.length===1?'Il giro viene cancellato':'I '+lt.laps.length+' giri vengono cancellati'} dal telefono`,'Azzera',()=>{lt.resetSession();saveSession();dev.screen='ready';toast('Sessione azzerata')});
-  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri di questa sessione vengono azzerati`,'Cambia pista',()=>{lt.resetSession();saveSession();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
+  else if(s==='wizard')drawWizard();else if(s==='trackmap')drawTrackMap();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();else if(s==='days')drawDays();else if(s==='day')drawDay();
+  else if(s==='confirmDayDel'){const d=(saved.days||[])[dev.dayIdx];drawConfirm('Cancellare questa giornata?',d?`${dayName(d.date)}: ${d.laps.length} giri cancellati per sempre`:'','Cancella',()=>{saved.days.splice(dev.dayIdx,1);persist();dev.screen='days';toast('Giornata cancellata')},'day')}
+  else if(s==='confirmReset')drawConfirm('Chiudere la giornata?',`I ${lt.laps.length} giri vanno in Giornate, divisi per turno, e oggi riparte da zero`,'Chiudi giornata',()=>{closeDay();dev.screen='ready';toast('Giornata salvata in Giornate')},'laps');
+  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri fatti qui vanno in Giornate`,'Cambia pista',()=>{closeDay();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
   else if(s==='confirmDel'){const t=saved.tracks[dev.tsel];drawConfirm(`Cancellare ${t?t.name:'la pista'}?`,t&&t.record?`Si perde anche il record (${fmt(t.record)})`:'Il traguardo salvato viene eliminato','Cancella',()=>{const i=dev.tsel;saved.tracks.splice(i,1);persist();
     if(i===dev.track){lt.clearLine();dev.track=-1}else if(i<dev.track)dev.track--;dev.tsel=Math.min(i,saved.tracks.length-1);dev.screen='tracks';toast('Pista cancellata')},'tracks')}
   if(dev.toast&&now()<dev.toastUntil){cx.font=FL(15,700);const w=cx.measureText(dev.toast).width+32;rr((W-w)/2,SB+8,w,28,8,C.btn);txt(dev.toast,W/2,SB+22.5,15,C.fg,'center',600)}}
@@ -701,7 +767,7 @@ function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.backgro
 function autoScreens(){const s=dev.screen;
   if(dev.lastT&&now()-dev.lastPerf>4000)dev.fix=false;     // nessun punto GPS da 4 s
   if(s==='boot'&&dev.fix)dev.screen=dev.speed>15?'race':'ready';
-  if(['ready','laps','settings','tracks','trackmap'].includes(s)&&dev.speed>15&&dev.fix)dev.screen='race';
+  if(['ready','laps','settings','tracks','trackmap','days','day'].includes(s)&&dev.speed>15&&dev.fix)dev.screen='race';
   if(s==='race'){if(dev.fix&&dev.speed<3){if(dev.stillSince==null)dev.stillSince=now();else if(now()-dev.stillSince>3000){dev.screen='ready';dev.stillSince=null;
     // fermo: il giro in corso si annulla (non conta la sosta); quando riparti il giro nuovo parte dal traguardo
     if(lt.inLap){lt.inLap=false;lt.deltaValid=false;dev.lapPts=[];dev.sd=null;toast('Fermo: giro in corso annullato')}}}else dev.stillSince=null}
