@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v44';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v45';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -747,38 +747,58 @@ function shareLaps(L,E,track,date){if(!L.length){toast('Nessun giro da condivide
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 
 // ---------- opzioni ----------
-function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+41,rh=36,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=(ext?10:9)+(instEvt?1:0),ah=H-top,content=nRows*rh+4;
-  const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
-  const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
-    if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
-  let y=row('GPS',ext?(ble.on?('esterno collegato'+(ble.hz?', '+ble.hz+' punti al secondo':'')):'esterno non collegato: tocca Esterno'):'');
-  segmented('sgps',cx0,y,cw,rh-8,[['Telefono','phone'],['Esterno','ble'],['Demo','demo']],saved.source,
-    v=>{if(v==='ble'&&saved.source==='ble'){bleConnect();return}if(saved.source!==v){setSource(v);resize()}});
-  if(ext){y=row('Frequenza GPS esterno','25 Hz usa solo i satelliti GPS');
-    segmented('sext',cx0,y,cw,rh-8,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
-  {const tk=saved.tracks[dev.track],auto=saved.minLapAuto!==false;
-  y=row('Giro minimo',auto?(tk&&tk.record?`metà del record di questa pista: ${effMinLap()} s`:'metà del record della pista'):'uguale per tutte le piste');
-  segmented('sminA',cx0,y,cw,rh-8,[['Auto',1],['Manuale',0]],auto?1:0,v=>{saved.minLapAuto=!!v;applyMinLap();persist()});
-  y=row(auto?'Giro minimo senza record':'Giro minimo manuale','sotto, il passaggio viene ignorato')}
-  button('dmin',cx0,y,44,rh-8,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);applyMinLap();persist()}});
-  num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
-  button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}});
-  y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
-  y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':'cambia circa ogni 5 secondi');
-  segmented('sdm',cx0,y,cw,rh-8,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
-  y=row('Decimali dei tempi',(saved.dec===2?'19.75':'19.750')+', il millesimo è indicativo');
-  segmented('sdec',cx0,y,cw,rh-8,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
-  y=row('Formato dei tempi',saved.tfmt==='apex'?'stile cronometrista':'stile digitale');
-  segmented('sfmt',cx0,y,cw,rh-8,saved.dec===2?[['1:41.58','dot'],["1'41\"58",'apex']]:[['1:41.580','dot'],["1'41\"580",'apex']],saved.tfmt==='apex'?'apex':'dot',v=>{saved.tfmt=v;persist()});
-  y=row('Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
-  y=row('Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
-  segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
-  if(instEvt){y=row('Installa come app','icona pulita, senza il simbolo di Chrome');
-    button('inst',cx0,y,cw,rh-8,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}
-  endList('sscroll',0,top,W,ah,content);
-  // si toccano solo le righe visibili, non quelle scorse sotto l'intestazione
-  hits=hits.slice(0,h0).concat(hits.slice(h0).filter(h=>h.y+h.h/2>top&&h.y+h.h/2<H))}
+// Opzioni: a sinistra le sezioni, a destra le scelte di quella sezione; tutto in una schermata, niente scorrimento
+const SET_TABS=[['gps','GPS'],['gara','In gara'],['giri','Giri'],['tempi','Tempi'],['schermo','Schermo']];
+function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);scrollZone=null;
+  const top=SB+41,sw=Math.min(150,W*0.28),tab=dev.setTab||'gps',th=Math.min(36,(H-top-8)/SET_TABS.length);
+  // sezioni
+  SET_TABS.forEach(([id,l],k)=>{const y=top+4+k*th,sel=id===tab;
+    if(sel)rr(8,y+2,sw-12,th-4,8,C.surface);
+    txt(l,24,y+th/2,15,sel?C.fg:C.dim,'left',sel?700:600);
+    if(sel){cx.beginPath();cx.arc(15,y+th/2,3,0,7);cx.fillStyle=C.accent;cx.fill()}
+    hits.push({id:'st_'+id,x:0,y,w:sw,h:th,act:()=>dev.setTab=id})});
+  cx.fillStyle=C.line;cx.fillRect(sw+4,top+8,1,H-top-16);
+  // scelte: etichetta sopra, comando sotto a tutta larghezza
+  const x0=sw+20,w0=W-x0-14,ch=30;let y=top+6;
+  const item=(lbl,hint)=>{txt(lbl,x0,y+8,14,C.fg,'left',600);if(hint)fitT(hint,x0+w0,y+8,12,C.dim,w0*0.55,'right',500);const cy=y+20;y+=ch+30;return cy};
+  if(tab==='gps'){const ext=saved.source==='ble';
+    let cy=item('Da dove arriva la posizione',saved.source==='demo'?'giri simulati':saved.source==='phone'?'GPS del telefono':ble.on?'esterno collegato':'esterno non collegato');
+    segmented('sgps',x0,cy,w0,ch,[['Telefono','phone'],['Esterno','ble'],['Demo','demo']],saved.source,
+      v=>{if(v==='ble'&&saved.source==='ble'){bleConnect();return}if(saved.source!==v){setSource(v);resize()}});
+    if(ext){cy=item('Frequenza del GPS esterno','25 Hz usa solo i satelliti GPS');
+      segmented('sext',x0,cy,w0,ch,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
+    // stato del segnale, da leggere e basta
+    const st=!dev.fix?'Nessun segnale':`Precisione ±${Math.round(dev.hAcc)} m`+(ext&&ble.on&&ble.hz?`, ${ble.hz} punti al secondo`:'');
+    txt('Segnale',x0,y+8,14,C.fg,'left',600);txt(st,x0+w0,y+8,14,dev.fix?(dev.hAcc<6?C.gainTxt:C.fg):C.lossTxt,'right',600);
+    if(ext&&!ble.on)button('sble',x0,y+22,w0,ch,'Collega GPS esterno',{primary:true,size:14,act:()=>bleConnect()})}
+  else if(tab==='gara'){
+    let cy=item('Numero grande','anche con un tocco in gara');
+    segmented('sview',x0,cy,w0,ch,[['Delta',0],['Tempo del giro',1]],saved.view,v=>{saved.view=v;persist()});
+    cy=item('Delta',saved.dmode==='live'?'cambia di continuo':'fermo, cambia a ogni settore');
+    segmented('sdm',x0,cy,w0,ch,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
+    cy=item('Velocità in alto');
+    segmented('sspd',x0,cy,w0,ch,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()})}
+  else if(tab==='giri'){const tk=saved.tracks[dev.track],auto=saved.minLapAuto!==false;
+    let cy=item('Giro minimo','i passaggi più brevi vengono ignorati');
+    segmented('sminA',x0,cy,w0,ch,[['Automatico',1],['Fisso',0]],auto?1:0,v=>{saved.minLapAuto=!!v;applyMinLap();persist()});
+    if(auto){txt('Adesso',x0,y+8,14,C.fg,'left',600);num(effMinLap()+' s',x0+w0,y+8,16,C.fg,'right',700);
+      y+=22;fitT(tk&&tk.record?'Metà del record di questa pista':'Senza record vale il valore fisso, poi metà del record',x0,y+8,12,C.dim,w0,'left',500);y+=24}
+    cy=item(auto?'Valore fisso, se la pista non ha record':'Valore fisso');
+    button('dmin',x0,cy,56,ch,'',{icon:'down',act:()=>{saved.minLap=Math.max(4,saved.minLap-1);applyMinLap();persist()}});
+    num(saved.minLap+' s',x0+w0/2,cy+ch/2+1,18,C.fg,'center',700);
+    button('imin',x0+w0-56,cy,56,ch,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}})}
+  else if(tab==='tempi'){
+    let cy=item('Precisione','il millesimo è indicativo');
+    segmented('sdec',x0,cy,w0,ch,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
+    cy=item('Come si scrivono');
+    segmented('sfmt',x0,cy,w0,ch,saved.dec===2?[['1:41.58','dot'],["1'41\"58",'apex']]:[['1:41.580','dot'],["1'41\"580",'apex']],saved.tfmt==='apex'?'apex':'dot',v=>{saved.tfmt=v;persist()});
+    txt('Esempio',x0,y+8,14,C.fg,'left',600);num(fmt(83340),x0+w0,y+8,18,C.fg,'right',700)}
+  else{
+    let cy=item('Colori',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
+    segmented('sth',x0,cy,w0,ch,[['Automatici','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
+    txt('Resta acceso',x0,y+8,14,C.fg,'left',600);txt('sempre, mentre ApexLap è aperta',x0+w0,y+8,12,C.dim,'right',500);y+=30;
+    if(instEvt){cy=item('Installa come app','icona pulita, senza Chrome');
+      button('inst',x0,cy,w0,ch,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}}}
 
 // ---------- disegno complessivo ----------
 function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
