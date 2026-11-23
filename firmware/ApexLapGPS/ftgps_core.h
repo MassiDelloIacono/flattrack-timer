@@ -8,7 +8,7 @@ namespace ftgps {
 
 // ---------------------------------------------------------------- Bluetooth (deve combaciare con l'app)
 // Servizio e caratteristiche: UUID scelti per questo progetto.
-static constexpr char BLE_NAME[] = "FlatTrack GPS";
+static constexpr char BLE_NAME[] = "ApexLap GPS";
 static constexpr char UUID_SERVICE[] = "f1a70001-5e4b-4c2a-9d6f-7a3c0de0f00d";
 static constexpr char UUID_POS[] = "f1a70002-5e4b-4c2a-9d6f-7a3c0de0f00d"; // notify, 20 byte per punto
 static constexpr char UUID_CTRL[] = "f1a70003-5e4b-4c2a-9d6f-7a3c0de0f00d"; // write 1 byte: modalità

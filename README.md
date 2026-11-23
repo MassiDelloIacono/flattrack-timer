@@ -1,6 +1,6 @@
-# Flat Track Timer – app per telefono Android
+# ApexLap – cronometro GPS da pista per telefono Android
 
-Cronometro GPS per flat track, con la stessa interfaccia touch del cronometro fatto in casa.
+Cronometro GPS da pista (nato per il flat track), con la stessa interfaccia touch del cronometro fatto in casa.
 Funziona da Chrome, si installa sulla schermata Home e lavora anche **senza connessione**.
 
 File da pubblicare (tutti e 5, nella stessa cartella):

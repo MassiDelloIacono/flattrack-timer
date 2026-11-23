@@ -1,6 +1,6 @@
-# FlatTrack GPS: firmware del GPS esterno
+# ApexLap GPS: firmware del GPS esterno
 
-Questo firmware trasforma la ESP32-C3 SuperMini con il GPS u-blox M10 (HGLRC M100-5883) in un GPS da pista a 25 Hz. Il GPS manda le posizioni all'app Flat Track Timer via Bluetooth.
+Questo firmware trasforma la ESP32-C3 SuperMini con il GPS u-blox M10 (HGLRC M100-5883) in un GPS da pista a 25 Hz. Il GPS manda le posizioni all'app ApexLap via Bluetooth.
 
 ## Collegamenti
 
@@ -22,7 +22,7 @@ TX e RX vanno incrociati. Guarda le scritte sul GPS, non i colori dei fili. Il t
    2. In "URL aggiuntive per il Gestore schede" incolla
       `https://espressif.github.io/arduino-esp32/package_esp32_index.json`.
 3. Installa il pacchetto delle schede: in Strumenti → Scheda → Gestore schede cerca **esp32** e installa "esp32 di Espressif Systems".
-4. Apri il file `FlatTrackGPS/FlatTrackGPS.ino`. Il file `ftgps_core.h` deve restare nella stessa cartella.
+4. Apri il file `ApexLapGPS/ApexLapGPS.ino`. Il file `ftgps_core.h` deve restare nella stessa cartella.
 5. Nel menu **Strumenti** imposta:
    - Scheda: **ESP32C3 Dev Module**, oppure "Nologo ESP32C3 Super Mini" se c'è;
    - USB CDC On Boot: **Enabled**;
@@ -41,7 +41,7 @@ TX e RX vanno incrociati. Guarda le scritte sul GPS, non i colori dei fili. Il t
 ## Usarlo con l'app
 
 1. Collega il GPS esterno al telefono con il cavo USB-C. Il LED blu della scheda lampeggia lento.
-2. Nell'app vai in **Opzioni → GPS → Esterno**, scegli **FlatTrack GPS** dall'elenco e conferma. Nella barra in alto compare la frequenza, per esempio "25 Hz".
+2. Nell'app vai in **Opzioni → GPS → Esterno**, scegli **ApexLap GPS** dall'elenco e conferma. Nella barra in alto compare la frequenza, per esempio "25 Hz".
 3. In **Opzioni → Frequenza GPS esterno** scegli:
    - **25 Hz**: solo satelliti GPS, più punti al secondo;
    - **10 Hz**: GPS + Galileo, più satelliti e posizione più stabile.

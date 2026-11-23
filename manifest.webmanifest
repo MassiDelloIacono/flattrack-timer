@@ -1,7 +1,7 @@
 {
-  "name": "Flat Track Timer",
-  "short_name": "FT Timer",
-  "description": "Cronometro GPS per flat track",
+  "name": "ApexLap",
+  "short_name": "ApexLap",
+  "description": "Cronometro GPS da pista",
   "start_url": "./index.html?app=1",
   "scope": "./",
   "display": "fullscreen",

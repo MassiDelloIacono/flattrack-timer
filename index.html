@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Flat Track Timer</title>
+<title>ApexLap</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
@@ -24,7 +24,7 @@ canvas{display:block;background:#000;touch-action:none}
 </style>
 </head>
 <body>
-<div id="loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#ffd21a;font:700 22px sans-serif;text-align:center;padding:20px">Flat Track Timer<br>caricamento…<br><small style="color:#888;font-size:15px">se resta così, chiudi e riapri con internet</small></div>
+<div id="loading" style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#ffd21a;font:700 22px sans-serif;text-align:center;padding:20px">ApexLap<br>caricamento…<br><small style="color:#888;font-size:15px">se resta così, chiudi e riapri con internet</small></div>
 <div id="ren" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:5;align-items:center;justify-content:center;flex-direction:column;padding:16px;box-sizing:border-box">
   <div style="color:#ffd21a;font:800 26px 'Barlow Condensed',sans-serif;margin-bottom:12px">Nome della pista</div>
   <input id="renIn" maxlength="24" autocomplete="off" style="font:700 26px 'Barlow Condensed',sans-serif;width:min(460px,90vw);padding:10px 14px;border-radius:10px;border:2px solid #ffd21a;background:#111;color:#fff">
@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v24';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v25';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -151,7 +151,7 @@ function startPhoneGps(){if(watchId!=null)return;
     e=>{dev.geoErr=e.code===1?'Permesso posizione negato':'GPS non disponibile';},{enableHighAccuracy:true,maximumAge:0,timeout:10000})}catch(e){dev.geoErr='GPS non disponibile qui'}}
 function stopPhoneGps(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}}
 
-// ===================== GPS esterno via Bluetooth (ESP32-C3 + u-blox M10, firmware FlatTrackGPS) =====================
+// ===================== GPS esterno via Bluetooth (ESP32-C3 + u-blox M10, firmware ApexLapGPS) =====================
 const BLE_SVC='f1a70001-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_POS='f1a70002-5e4b-4c2a-9d6f-7a3c0de0f00d',
   BLE_CTRL='f1a70003-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_INFO='f1a70004-5e4b-4c2a-9d6f-7a3c0de0f00d';
 const ble={dev:null,pos:null,ctrl:null,info:null,on:false,busy:false,hz:0,n:0,t0:0,off:null,last:-1,sv:0,state:0,devHz:0,fw:0};
@@ -190,7 +190,7 @@ async function bleRetry(){if(saved.source!=='ble'||ble.on||ble.busy||!ble.dev)re
 function bleClose(){ble.on=false;try{if(ble.dev&&ble.dev.gatt.connected)ble.dev.gatt.disconnect()}catch(e){}}
 // all'avvio: se il browser ricorda il GPS già autorizzato, mi ricollego senza chiedere nulla
 function bleAuto(){try{if(navigator.bluetooth&&navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(ds=>{
-  const d=ds.find(x=>/FlatTrack/i.test(x.name||''));if(d){ble.dev=d;d.addEventListener('gattserverdisconnected',bleLost);bleRetry()}}).catch(()=>{})}catch(e){}}
+  const d=ds.find(x=>/ApexLap|FlatTrack/i.test(x.name||''));if(d){ble.dev=d;d.addEventListener('gattserverdisconnected',bleLost);bleRetry()}}).catch(()=>{})}catch(e){}}
 async function setExtMode(m){saved.extMode=m;persist();if(ble.on&&ble.ctrl){try{await ble.ctrl.writeValue(new Uint8Array([m]))}catch(e){}}}
 
 // ===================== demo: moto virtuale su ovale =====================
@@ -396,7 +396,7 @@ function tabBar(){const th=TB,y=H-th,tw=W/3,n=lt.laps.length;hline(0,y,W,C.line)
     hits.push({id,x,y,w:tw,h:th,act})})}
 // ---------- avvio ----------
 function drawBoot(){statusBar('','');
-  txt('Flat Track',W/2,70,44,C.accentTxt,'center',800,'n');txt('Cronometro GPS',W/2,102,16,C.dim,'center',500);
+  txt('ApexLap',W/2,70,44,C.fg,'center',800,'n');txt('Cronometro GPS da pista',W/2,102,16,C.dim,'center',500);
   txt(VERSION,W-8,H-10,11,C.faint,'right',500);
   if(dev.geoErr){fitT(dev.geoErr,W/2,140,16,C.loss,W-20,'center',600);
     button('demo1',W/2-110,166,220,46,'Prova in demo',{primary:true,icon:'play',act:()=>setSource('demo')})}
@@ -617,7 +617,7 @@ function drawConfirm(title,sub,yesLbl,act,back='ready'){statusBar('','');
   button('yes',W/2+6,H-60,bw,40,yesLbl,{danger:true,act,size:16})}
 
 function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condividere');return}
-  const lines=[`Flat Track Timer, ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Miglior giro: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
+  const lines=[`ApexLap, ${new Date().toLocaleString('it-IT')}`,trackName()||'Pista',`Miglior giro: ${fmt(lt.bestMs)} (giro ${lt.bestNo})`,'',...L.map((ms,i)=>`${i+1}\t${fmt(ms)}`)].join('\n');
   if(navigator.share)navigator.share({title:'Giri',text:lines}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
 

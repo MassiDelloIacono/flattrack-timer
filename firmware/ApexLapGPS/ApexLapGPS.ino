@@ -1,4 +1,4 @@
-// FlatTrackGPS — ricevitore GPS esterno per l'app Flat Track Timer
+// ApexLapGPS — ricevitore GPS esterno per l'app ApexLap
 // Scheda: ESP32-C3 SuperMini.  GPS: u-blox M10 (es. HGLRC M100-5883) su GPIO20 (RX) / GPIO21 (TX).
 // Il telefono alimenta la scheda dalla presa USB-C (OTG); i dati vanno al telefono via Bluetooth Low Energy.
 //
