@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v35';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v36';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -116,12 +116,12 @@ const gpsTime=()=>dev.lastT?dev.lastT+Math.min(1500,now()-dev.lastPerf):0;
 function buildTrace(pts,tk,ms){if(!pts||pts.length<10)return null;const o=[tk.lat,tk.lon],kx=R*D2R*Math.cos(o[0]*D2R),ky=R*D2R,out=[];let lx=null,ly=null;
   for(const p of pts){const x=(p[1]-o[1])*kx,y=(p[0]-o[0])*ky;if(lx==null||Math.hypot(x-lx,y-ly)>=1.5){out.push([Math.round(x*10),Math.round(y*10),Math.round(p[2])]);lx=x;ly=y}if(out.length>=2500)break}
   return out.length>=10?{o,p:out,ms,d:Date.now()}:null}
-// ===================== settori: tratti uguali da circa 3 secondi l'uno =====================
+// ===================== settori: tratti uguali da circa 5 secondi l'uno =====================
 const splitCache={k:null,v:null};
 function trackSplits(tk){const tr=tk&&tk.trace;if(!tr||!tr.p||tr.p.length<20)return null;const key=tr.d+':'+tr.p.length;if(splitCache.k===key)return splitCache.v;
   const p=tr.p,n=p.length,cum=[0];for(let i=1;i<n;i++)cum.push(cum[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1])/10);const L=cum[n-1]||1;
-  // il delta si aggiorna circa ogni 3 s di giro: abbastanza spesso da seguirlo, abbastanza fermo da leggerlo con un'occhiata
-  const ns=Math.max(3,Math.min(12,Math.round((tr.ms||20000)/3000))),res=[];
+  // il delta si aggiorna circa ogni 5 s di giro: abbastanza spesso da seguirlo, abbastanza fermo da leggerlo con un'occhiata
+  const ns=Math.max(3,Math.min(12,Math.round((tr.ms||20000)/5000))),res=[];
   for(let k=1;k<ns;k++){const f=k/ns;res.push({f,i:Math.max(0,cum.findIndex(c=>c>=f*L))})}
   splitCache.k=key;splitCache.v=res;return res}
 function updateSector(){if(!lt.inLap){dev.sd=null;return}const t=now();
@@ -129,7 +129,7 @@ function updateSector(){if(!lt.inLap){dev.sd=null;return}const t=now();
     // al traguardo il numero diventa il distacco finale del giro appena chiuso
     if(nl>=2)val=(lt.lastWasBest?lt.lastMs-lt.prevBest:lt.lastMs-lt.bestMs)/1000;
     dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t}}
-  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track])||[1,2,3,4,5].map(k=>({f:k/6})),b=lt.best;
+  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track])||[1,2,3].map(k=>({f:k/4})),b=lt.best;
   if(!lt.deltaValid||b.length<2)return;const tot=b[b.length-1][0];let moved=false;
   while(sd.idx<sp.length&&lt.curDist>=sp[sd.idx].f*tot){sd.idx++;moved=true}
   if(moved){sd.val=lt.delta;sd.pred=lt.bestMs+lt.delta*1000;sd.at=t}}
@@ -515,9 +515,8 @@ function drawRace(){
     else num(gap(g/1000)+' dal migliore',W/2,py+ph-18,22,g>0?C.lossTxt:C.gainTxt,'center',700,W-60);
     bottomCells(cellsY);hits.push({id:'hold',x:0,y:SB,w:W,h:H-SB,act:()=>dev.lapHold=0});return}
   if(view===0&&valid){
-    if(sec){const sp=trackSplits(saved.tracks[dev.track])||[0,0,0,0,0],ns=sp.length+1,age=now()-(sd?sd.at:0);
-      // il numero resta fermo fino alla prossima uscita di curva; quando cambia, un lampo breve
-      if(d!=null&&age<700){cx.globalAlpha=1-age/700;cx.fillStyle=d<0?C.gain:C.loss;cx.globalAlpha*=0.16;cx.fillRect(8,py,W-16,ph);cx.globalAlpha=1}
+    if(sec){const sp=trackSplits(saved.tracks[dev.track])||[0,0,0],ns=sp.length+1,age=now()-(sd?sd.at:0);
+      // il numero resta fermo fino al prossimo tratto; il colore delle cifre dice se guadagni o perdi
       panel(8,py,W-16,ph,'Delta',sd&&sd.idx>0?`settore ${sd.idx} di ${ns}`:(d!=null?'al traguardo':null),C.frame);
       if(d==null){num('—',W/2,mid-10,72,C.faint,'center',700,W-40);txt('Il delta arriva fra pochi secondi',W/2,py+ph-16,15,C.dim,'center',500)}
       else if(Math.abs(d)<0.005)num('0.00',W/2,mid,lost?96:112,C.fg,'center',700,W-40);
@@ -734,7 +733,7 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
   button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(120,saved.minLap+1);applyMinLap();persist()}});
   y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
-  y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':'cambia circa ogni 3 secondi');
+  y=row('Delta in gara',saved.dmode==='live'?'cambia di continuo':'cambia circa ogni 5 secondi');
   segmented('sdm',cx0,y,cw,rh-8,[['Per settore','sec'],['Continuo','live']],saved.dmode==='live'?'live':'sec',v=>{saved.dmode=v;persist()});
   y=row('Decimali dei tempi',(saved.dec===2?'19.75':'19.750')+', il millesimo è indicativo');
   segmented('sdec',cx0,y,cw,rh-8,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
