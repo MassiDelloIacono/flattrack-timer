@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v42';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v43';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -481,9 +481,9 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     let cs=24;cells.forEach(([,v])=>{while(cs>14&&numMetrics(v,cs,700).tot>pw-20)cs--});
     cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
       // etichetta e numero centrati sulla colonna; il distacco dell'ultimo giro sta accanto all'etichetta
-      cx.font=FL(12,600);const lw=cx.measureText(l).width,gw=g?cx.measureText(g).width+8:0,lx=x+pw/2-(lw+gw)/2;
-      txt(l,lx,cy+1,12,C.dim,'left',600);if(g)txt(g,lx+lw+8,cy+1,12,C.lossTxt,'left',700);
-      num(v,x+pw/2,cy+chh/2+9,cs,c,'center',700)})}
+      cx.font=FL(10,600);const lw=cx.measureText(l).width,gw=g?cx.measureText(g).width+6:0,lx=x+pw/2-(lw+gw)/2;
+      txt(l,lx,cy+5,10,C.dim,'left',600);if(g)txt(g,lx+lw+6,cy+5,10,C.lossTxt,'left',700);
+      num(v,x+pw/2,cy+chh/2+5,cs,c,'center',700)})}
   tabBar()}
 
 // ---------- gara ----------
@@ -501,7 +501,7 @@ function bottomCells(y){const sec=saved.dmode!=='live',sd=dev.sd,three=W>=400&&(
   cells.push(['Migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
   const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
   cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
-    txt(l,x+pw/2,py,12,fl?C.accent:C.dim,'center',600);num(v,x+pw/2,py+ph/2+9,27,fl?C.accentTxt:c,'center',700,pw-24)})}
+    txt(l,x+pw/2,py+5,10,fl?C.accent:C.dim,'center',600);num(v,x+pw/2,py+ph/2+5,28,fl?C.accentTxt:c,'center',700,pw-16)})}
 function drawRace(){
   const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
   statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'');
@@ -553,8 +553,7 @@ function drawRace(){
     else txt('Miglior giro',W/2,py+ph-16,18,C.gainTxt,'center',600)}
   bottomCells(cellsY);
   // un tocco scambia Delta e Tempo (i pallini dicono quale vista è attiva)
-  if(valid){for(let i=0;i<2;i++){cx.beginPath();cx.arc(W/2-5+i*10,cellsY-5,2.5,0,7);cx.fillStyle=i===view?C.accentTxt:C.off;cx.fill()}
-    hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}}
+  if(valid){hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}}
 
 // ---------- liste trascinabili ----------
 let scrollZone=null,drag=null;
