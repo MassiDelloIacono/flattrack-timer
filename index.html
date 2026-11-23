@@ -8,7 +8,7 @@
 <title>ApexLap</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,700;1,800;1,900&family=Geist+Mono:wght@500&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0f0f10;color:#ededed;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Barlow Condensed","Roboto Condensed",sans-serif}
 #app{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;display:flex;align-items:stretch;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v47';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v48';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -292,12 +292,12 @@ async function goFull(){if(triedFull)return;triedFull=true;try{await document.do
 const cv=$('scr'),cx=cv.getContext('2d');
 // SERA: nero, testi chiari (niente abbagliamento al buio). GIORNO: bianco, testi neri (vince sui riflessi al sole)
 const NIGHT={bg:'#0f0f10',surface:'#19191b',line:'rgba(237,237,237,.09)',frame:'#a1a1a6',fg:'#ededed',dim:'#a1a1a6',faint:'#85858b',off:'#29292c',
-  accent:'#ee8fb4',accentDown:'#d97aa0',accentTxt:'#f2a3c3',onAccent:'#1a0d12',warn:'#d9a441',
+  accent:'#ee8fb4',accentDown:'#d97aa0',accentTxt:'#f2a3c3',onAccent:'#1a0d12',onAccentDim:'rgba(26,13,18,.62)',warn:'#d9a441',
   gain:'#4cc38a',gainTxt:'#5fd49a',gainDeep:'#17784a',gainWash:'rgba(76,195,138,.08)',
   loss:'#e5484d',lossTxt:'#ff6369',lossDeep:'#a3262a',
   btn:'#232325',btnDown:'#2e2e31',chart:'#3a3a3e',selWash:'rgba(237,237,237,.06)'};
 const DAY={bg:'#fafafa',surface:'#ffffff',line:'rgba(23,23,23,.10)',frame:'#525252',fg:'#171717',dim:'#525252',faint:'#737373',off:'#e4e4e7',
-  accent:'#c94f84',accentDown:'#b2416f',accentTxt:'#b23d70',onAccent:'#ffffff',warn:'#b45309',
+  accent:'#c94f84',accentDown:'#b2416f',accentTxt:'#b23d70',onAccent:'#ffffff',onAccentDim:'rgba(255,255,255,.78)',warn:'#b45309',
   gain:'#16a34a',gainTxt:'#15803d',gainDeep:'#15803d',gainWash:'rgba(22,163,74,.08)',
   loss:'#dc2626',lossTxt:'#b91c1c',lossDeep:'#991b1b',
   btn:'#ececee',btnDown:'#e0e0e3',chart:'#c4c4c8',selWash:'rgba(23,23,23,.05)'};
@@ -329,12 +329,15 @@ function resize(){
 addEventListener('resize',resize);document.addEventListener('fullscreenchange',()=>setTimeout(resize,100));screen.orientation&&screen.orientation.addEventListener&&screen.orientation.addEventListener('change',()=>setTimeout(resize,100));
 // ---------- tipografia: etichette in Barlow, numeri in Barlow Condensed a cifre di larghezza fissa ----------
 // numeri in Exo 2 (sportivo, da cruscotto); Barlow Condensed resta come riserva se il font non è ancora scaricato
-const FN=(s,w=700)=>`${w} ${s}px "Exo 2","Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
-try{['600','700','800'].forEach(w=>document.fonts.load(w+' 40px "Exo 2"'))}catch(e){}
+// numeri: Exo 2 corsivo nerissimo, da cruscotto sportivo
+const FN=(s,w=700)=>`italic ${w>=700?900:800} ${s}px "Exo 2","Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif`;
+// etichette piccole da strumento
+const FM=s=>`500 ${s}px "Geist Mono","Roboto Mono",ui-monospace,monospace`;
+try{['italic 900','italic 800'].forEach(w=>document.fonts.load(w+' 40px "Exo 2"'));document.fonts.load('500 12px "Geist Mono"')}catch(e){}
 const FL=(s,w=500)=>`${Math.min(w,600)} ${s}px "Barlow","Roboto","Helvetica Neue",sans-serif`;
 const F=FN;
 let hits=[],pressed=null;
-function txt(t,x,y,size,col,al='left',w=600,fam='l'){cx.font=fam==='n'?FN(size,w):FL(size,w);cx.fillStyle=col;cx.textAlign=al;cx.textBaseline='middle';cx.fillText(t,x,y)}
+function txt(t,x,y,size,col,al='left',w=600,fam='l'){cx.font=fam==='n'?FN(size,w):fam==='m'?FM(size):FL(size,w);cx.fillStyle=col;cx.textAlign=al;cx.textBaseline='middle';cx.fillText(t,x,y)}
 function fitT(t,x,y,size,col,maxW,al='left',w=600,fam='l'){const f=fam==='n'?FN:FL;cx.font=f(size,w);while(cx.measureText(t).width>maxW&&size>9){size--;cx.font=f(size,w)}
   txt(t,x,y,size,col,al,w,fam);return cx.measureText(t).width}
 const isDig=ch=>ch>='0'&&ch<='9';
@@ -373,7 +376,7 @@ function icon(name,x,y,s,col){cx.save();cx.translate(x,y);cx.strokeStyle=col;cx.
 // riquadro a filo sottile con etichetta incastrata nel bordo superiore (sx) ed eventuale valore a destra
 // stile minimale: nessun contorno, solo una piccola etichetta sopra il contenuto (a destra un'eventuale nota)
 function panel(x,y,w,h,label,labelR,col,colR){const lc=(col&&col!==C.line&&col!==C.frame)?col:C.dim;
-  if(label)txt(label,x+6,y+4,12,lc,'left',600);if(labelR)txt(labelR,x+w-6,y+4,12,colR||lc,'right',600)}
+  if(label)txt(label.toLowerCase(),x+6,y+5,11,lc,'left',500,'m');if(labelR)txt(labelR.toLowerCase(),x+w-6,y+5,11,colR||lc,'right',500,'m')}
 function button(id,x,y,w,h,label,opt={}){const down=pressed===id,dis=opt.disabled;
   let bg=down?C.btnDown:C.btn,fg=dis?C.faint:C.fg;
   if(opt.primary&&!dis){bg=down?C.dim:C.fg;fg=C.bg}
@@ -430,13 +433,13 @@ function header(title,backAct,right){
   if(right)txt(right,W-12,SB+20,13,C.dim,'right',500);
   hline(0,SB+40,W,C.line)}
 // barra schede in basso (riepilogo)
-function tabBar(){const th=TB,y=H-th,tw=W/3,n=lt.laps.length;hline(0,y,W,C.line);
-  [['laps','laps','Giri','',()=>{dev.screen='laps';dev.scroll=0;dev.scrollV=0}],
-   ['tracks','pin','Piste','',openTracks],
-   ['set','gear','Opzioni','',()=>dev.screen='settings']].forEach(([id,ic,l,cnt,act],k)=>{const x=k*tw,down=pressed===id,cy=y+th/2+1;
-    if(down){cx.fillStyle=C.btnDown;cx.fillRect(x,y+1,tw,th-1)}
-    cx.font=FL(15,600);const lw=cx.measureText(l).width;cx.font=FN(15,600);const cw=cnt?cx.measureText(cnt).width+6:0,tot=14+7+lw+cw,sx=x+(tw-tot)/2;
-    icon(ic,sx+7,cy,13,C.dim);txt(l,sx+21,cy,15,C.fg,'left',600);if(cnt)txt(cnt,sx+21+lw+6,cy,15,C.dim,'left',600,'n');
+function tabBar(){const th=TB,y=H-th,tw=(W-16-12)/3;
+  [['laps','laps','Giri',()=>{dev.screen='laps';dev.scroll=0;dev.scrollV=0}],
+   ['tracks','pin','Piste',openTracks],
+   ['set','gear','Opzioni',()=>dev.screen='settings']].forEach(([id,ic,l,act],k)=>{const x=8+k*(tw+6),down=pressed===id,cy=y+th/2-1;
+    rr(x,y+2,tw,th-8,12,down?C.btnDown:C.surface);
+    cx.font=FL(14,600);const lw=cx.measureText(l).width,tot=13+7+lw,sx=x+(tw-tot)/2;
+    icon(ic,sx+6,cy,12,C.dim);txt(l,sx+20,cy,14,C.fg,'left',600);
     hits.push({id,x,y,w:tw,h:th,act})})}
 // ---------- avvio ----------
 function drawBoot(){statusBar('','');
@@ -471,18 +474,20 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     panel(18+pw,py,pw,ph,'Giro minimo');num(effMinLap()+' s',18+pw*1.5,py+ph/2+2,30,C.fg,'center',700)}
   else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs;
     const py=top+16,ph=104,map=tk&&tk.trace&&W>=440,mw=map?Math.min(170,W*0.3):0,nx=16;
-    panel(10,py,W-20,ph,'Miglior giro',lapLabel(lt.bestNo-1,lt.laps,lt.ends));
-    if(map){cx.fillStyle=C.line;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20);
+    // il pezzo forte: blocco rosa pieno, testo scuro
+    rr(10,py,W-20,ph,16,C.accent);
+    txt('miglior giro',nx+2,py+12,11,C.onAccentDim,'left',500,'m');txt(lapLabel(lt.bestNo-1,lt.laps,lt.ends),W-24-mw-8,py+12,11,C.onAccentDim,'right',500,'m');
+    if(map){cx.fillStyle=C.onAccentDim;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20,C.onAccent);
       hits.push({id:'heroMap',x:W-24-mw,y:py,w:mw+14,h:ph,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
-    num(fmt(lt.bestMs),nx,py+ph/2+(rec?-6:2),rec?66:76,C.gainTxt,'left',700,W-60-mw);
-    if(rec){txt('Record della pista',nx,py+ph-14,12,C.dim,'left',600);num(fmt(tk.record),nx+112,py+ph-14,15,C.fg,'left',700)}
+    num(fmt(lt.bestMs),nx,py+ph/2+(rec?-4:4),rec?62:72,C.onAccent,'left',700,W-60-mw);
+    if(rec){const rt='record '+fmt(tk.record);cx.font=FM(12);const rw=cx.measureText(rt).width+20;rr(nx,py+ph-26,rw,18,9,C.onAccent);txt(rt,nx+10,py+ph-17,12,C.accent,'left',500,'m')}
     const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg],['Turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-24)/4;
     let cs=24;cells.forEach(([,v])=>{while(cs>14&&numMetrics(v,cs,700).tot>pw-20)cs--});
     cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
       // etichetta e numero centrati sulla colonna; il distacco dell'ultimo giro sta accanto all'etichetta
-      cx.font=FL(10,600);const lw=cx.measureText(l).width,gw=g?cx.measureText(g).width+6:0,lx=x+pw/2-(lw+gw)/2;
-      txt(l,lx,cy+5,10,C.dim,'left',600);if(g)txt(g,lx+lw+6,cy+5,10,C.lossTxt,'left',700);
+      cx.font=FM(11);const lw=cx.measureText(l.toLowerCase()).width,gw=g?cx.measureText(g).width+6:0,lx=x+pw/2-(lw+gw)/2;
+      txt(l.toLowerCase(),lx,cy+5,11,C.dim,'left',500,'m');if(g)txt(g,lx+lw+6,cy+5,11,C.lossTxt,'left',500,'m');
       num(v,x+pw/2,cy+chh/2+5,cs,c,'center',700)})}
   tabBar()}
 
@@ -501,7 +506,7 @@ function bottomCells(y){const sec=saved.dmode!=='live',sd=dev.sd,three=W>=400&&(
   cells.push(['Migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
   const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
   cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
-    txt(l,x+pw/2,py+5,10,fl?C.accent:C.dim,'center',600);num(v,x+pw/2,py+ph/2+5,28,fl?C.accentTxt:c,'center',700,pw-16)})}
+    txt(l.toLowerCase(),x+pw/2,py+5,11,fl?C.accent:C.dim,'center',500,'m');num(v,x+pw/2,py+ph/2+5,28,fl?C.accentTxt:c,'center',700,pw-16)})}
 function drawRace(){
   const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
   statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'');
@@ -682,12 +687,12 @@ function traceGeom(tr){const R0=tr.p.map(q=>[q[0]/10,q[1]/10,q[2]]),nP=R0.length
     if(i)len+=Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1])});
   return{P,x0,x1,y0,y1,v0,v1,len}}
 // miniatura della pista dentro un riquadro (x,y,w,h)
-function drawTraceMini(tk,x,y,w,h){const tr=tk.trace,g=traceGeom(tr),sc=Math.min((w-8)/Math.max(1,g.x1-g.x0),(h-8)/Math.max(1,g.y1-g.y0)),
+function drawTraceMini(tk,x,y,w,h,mono){const tr=tk.trace,g=traceGeom(tr),sc=Math.min((w-8)/Math.max(1,g.x1-g.x0),(h-8)/Math.max(1,g.y1-g.y0)),
   ox=x+w/2-(g.x0+g.x1)/2*sc,oy=y+h/2+(g.y0+g.y1)/2*sc,vr=Math.max(1,g.v1-g.v0);
   cx.lineCap='round';cx.lineJoin='round';
   for(let i=1;i<g.P.length;i++){cx.beginPath();cx.moveTo(ox+g.P[i-1][0]*sc,oy-g.P[i-1][1]*sc);cx.lineTo(ox+g.P[i][0]*sc,oy-g.P[i][1]*sc);
-    cx.strokeStyle=spdCol((g.P[i][2]-g.v0)/vr);cx.lineWidth=2.5;cx.stroke()}
-  const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R;cx.beginPath();cx.arc(ox+(tk.lon-tr.o[1])*kx*sc,oy-(tk.lat-tr.o[0])*ky*sc,4,0,7);cx.fillStyle=C.accent;cx.fill()}
+    cx.strokeStyle=mono||spdCol((g.P[i][2]-g.v0)/vr);cx.lineWidth=2.5;cx.stroke()}
+  const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R;cx.beginPath();cx.arc(ox+(tk.lon-tr.o[1])*kx*sc,oy-(tk.lat-tr.o[0])*ky*sc,4,0,7);cx.fillStyle=mono?C.bg:C.accent;cx.fill()}
 function setSecs(tk,n,f){tk.sec={n,f:f||eqSplits(n)};persist()}
 function moveSecBoundary(tk,P,X,Y){const p=lastPt;let bj=-1,bd=30;P.forEach((q,j)=>{const d=Math.hypot(X(q[0])-p.x,Y(q[1])-p.y);if(d<bd){bd=d;bj=j}});
   if(bj<0){toast('Tocca sopra la pista');return}const cum=traceCum(tk.trace),L=cum[cum.length-1]||1,fj=cum[bj]/L;
