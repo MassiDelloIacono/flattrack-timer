@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v39';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v40';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -479,8 +479,10 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg],['Turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-24)/4;
     cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
-      panel(x,cy,pw,chh,l,null,C.line);if(g){cx.font=FL(12,600);txt(g,x+6+cx.measureText(l).width+8,cy+4,12,C.lossTxt,'left',700)}
-      num(v,x+6,cy+chh/2+4,28,c,'left',700,pw-16)})}
+      // etichetta e numero centrati sulla colonna; il distacco dell'ultimo giro sta accanto all'etichetta
+      cx.font=FL(12,600);const lw=cx.measureText(l).width,gw=g?cx.measureText(g).width+8:0,lx=x+pw/2-(lw+gw)/2;
+      txt(l,lx,cy+4,12,C.dim,'left',600);if(g)txt(g,lx+lw+8,cy+4,12,C.lossTxt,'left',700);
+      num(v,x+pw/2,cy+chh/2+4,28,c,'center',700,pw-16)})}
   tabBar()}
 
 // ---------- gara ----------
@@ -498,7 +500,7 @@ function bottomCells(y){const sec=saved.dmode!=='live',sd=dev.sd,three=W>=400&&(
   cells.push(['Migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
   const pw=(W-16-(cells.length-1)*8)/cells.length,hl=now()<dev.lapHl,py=y+8,ph=H-py-6;
   cells.forEach(([l,v,c],k)=>{const x=8+k*(pw+8),fl=k===0&&hl;
-    panel(x,py,pw,ph,l,null,fl?C.accent:C.line);num(v,x+6,py+ph/2+4,28,fl?C.accentTxt:c,'left',700,pw-16)})}
+    txt(l,x+pw/2,py+4,12,fl?C.accent:C.dim,'center',600);num(v,x+pw/2,py+ph/2+4,28,fl?C.accentTxt:c,'center',700,pw-16)})}
 function drawRace(){
   const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
   statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'');
