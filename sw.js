@@ -1,5 +1,5 @@
 // Fa funzionare l'app anche senza connessione (in pista spesso non c'è campo).
-const CACHE = 'ftt-v34';
+const CACHE = 'ftt-v35';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

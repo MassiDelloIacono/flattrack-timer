@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v34';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v35';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -162,7 +162,7 @@ function onFix(f){
     if(dPend<60){const q0=toLocal(dev.pend.lat,dev.pend.lon),hd=(Math.atan2(f.x-q0.x,f.y-q0.y)/D2R+360)%360;
       const tk={lat:dev.pend.lat,lon:dev.pend.lon,heading:hd,width:30};
       // stessa pista (entro 300 m): aggiorno il suo traguardo e tengo nome e record; altrimenti pista nuova
-      const wp=saved.tracks[dev.wizPrev];let i=wp&&hav(wp.lat,wp.lon,tk.lat,tk.lon)<300?dev.wizPrev:saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);
+      const wp=saved.tracks[dev.wizPrev];let i=dev.wizFresh?-1:wp&&hav(wp.lat,wp.lon,tk.lat,tk.lon)<300?dev.wizPrev:saved.tracks.findIndex(o=>hav(o.lat,o.lon,tk.lat,tk.lon)<300);
       if(i<0){tk.name=newTrackName();tk.created=Date.now();saved.tracks.push(tk);i=saved.tracks.length-1;dev.wizNew=true}
       else{saved.tracks[i]={...saved.tracks[i],lat:tk.lat,lon:tk.lon,heading:hd};dev.wizNew=false}
       persist();useTrack(i);dev.wiz=3;dev.wizDoneAt=now()}
@@ -605,7 +605,7 @@ function drawDay(){statusBar('','');const d=(saved.days||[])[dev.dayIdx];if(!d){
   button('ddel',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDayDel'});
   lapList(d.laps,d.ends,'dscroll',false)}
 // ---------- procedura traguardo ----------
-function startWizard(){if(!dev.fix){toast('Aspetta il segnale GPS');return}dev.wizPrev=dev.track;lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
+function startWizard(fresh){if(!dev.fix){toast('Aspetta il segnale GPS');return}dev.wizFresh=fresh===true;dev.wizPrev=dev.track;lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
 function drawWizard(){statusBar('','');
   header('Imposta traguardo',()=>{dev.screen='ready';dev.wiz=0},dev.wiz<3?`passo ${dev.wiz} di 2`:'');
   const top=SB+44;
@@ -631,14 +631,10 @@ function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i]
   const close=()=>{r.style.display='none';inp.blur()};
   $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
   $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
-// variante: stesso traguardo, record e tracciato suoi (es. ovale e TT nello stesso impianto)
-function addVariant(i){const t=saved.tracks[i];if(!t)return;let k=2;while(saved.tracks.some(o=>o.name===`${t.name} ${k}`))k++;
-  const v={lat:t.lat,lon:t.lon,heading:t.heading,width:t.width,name:`${t.name} ${k}`.slice(0,24),created:Date.now()};
-  saved.tracks.splice(i+1,0,v);if(dev.track>i)dev.track++;if(saved.lastTrack>i)saved.lastTrack++;dev.tsel=i+1;persist();toast('Variante creata: rinominala e poi Usa')}
 function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
   header('Piste',()=>dev.screen='ready','');
   if(n){cx.font=FL(20,700);txt(n===1?'1 salvata':`${n} salvate`,58+cx.measureText('Piste').width,SB+21,13,C.dim,'left',500)}
-  button('tnew',W-44,SB+5,36,30,'',{ghost:true,icon:'plus',act:startWizard});
+  button('tnew',W-44,SB+5,36,30,'',{ghost:true,icon:'plus',act:()=>startWizard(true)});
   const top=SB+41,rh=36,ah=H-52-top;
   if(!n){scrollZone=null;icon('pin',W/2,top+40,24,C.faint);txt('Nessuna pista salvata',W/2,top+70,16,C.fg,'center',600);
     txt('Tocca + o imposta un traguardo: la pista si salva da sola',W/2,top+92,13,C.dim,'center',500)}
@@ -647,7 +643,7 @@ function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
     if(sel){cx.fillStyle=C.selWash;cx.fillRect(0,y,W,rh)}
     const dist=dev.gps&&dev.gps.lat?hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon):null;
     const ds=dist==null?'':dist<1000?`${Math.round(dist)} m`:`${(dist/1000).toFixed(dist<10000?1:0)} km`;
-    const colRec=sel?W-176:W-74;
+    const colRec=sel?W-136:W-74;
     num(t.record?fmt(t.record):'--',colRec,cy,18,t.record?C.gainTxt:C.faint,'right',700);
     if(!sel)txt(ds,W-14,cy,13,C.dim,'right',500);
     const maxName=colRec-86-14;let nm=t.name;cx.font=FL(16,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
@@ -655,8 +651,7 @@ function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
     hline(12,y+rh-1,W-24,C.line);const vy=Math.max(y,top),vh=Math.min(y+rh,top+ah)-vy;if(vh>4)hits.push({id:'trow'+i,x:0,y:vy,w:W,h:vh,act:()=>dev.tsel=i});
     if(sel&&y>=top-2&&y+rh<=top+ah+2)acts.push(y)}
   if(n)endList('tscroll',0,top,W,ah,n*rh);
-  acts.forEach(y=>{button('tvar',W-164,y+2,36,rh-4,'',{ghost:true,icon:'copy',act:()=>addVariant(dev.tsel)});
-    button('tmap',W-124,y+2,36,rh-4,'',{ghost:true,icon:'map',act:()=>{dev.screen='trackmap'}});
+  acts.forEach(y=>{    button('tmap',W-124,y+2,36,rh-4,'',{ghost:true,icon:'map',act:()=>{dev.screen='trackmap'}});
     button('tren',W-84,y+2,36,rh-4,'',{ghost:true,icon:'edit',act:()=>openRename(dev.tsel)});
     button('tdel',W-44,y+2,36,rh-4,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDel'})});
   const ok=dev.tsel>=0&&dev.tsel<n,inUse=ok&&dev.tsel===dev.track;
