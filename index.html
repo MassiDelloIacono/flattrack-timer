@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v36';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v37';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -116,22 +116,25 @@ const gpsTime=()=>dev.lastT?dev.lastT+Math.min(1500,now()-dev.lastPerf):0;
 function buildTrace(pts,tk,ms){if(!pts||pts.length<10)return null;const o=[tk.lat,tk.lon],kx=R*D2R*Math.cos(o[0]*D2R),ky=R*D2R,out=[];let lx=null,ly=null;
   for(const p of pts){const x=(p[1]-o[1])*kx,y=(p[0]-o[0])*ky;if(lx==null||Math.hypot(x-lx,y-ly)>=1.5){out.push([Math.round(x*10),Math.round(y*10),Math.round(p[2])]);lx=x;ly=y}if(out.length>=2500)break}
   return out.length>=10?{o,p:out,ms,d:Date.now()}:null}
-// ===================== settori: tratti uguali da circa 5 secondi l'uno =====================
-const splitCache={k:null,v:null};
-function trackSplits(tk){const tr=tk&&tk.trace;if(!tr||!tr.p||tr.p.length<20)return null;const key=tr.d+':'+tr.p.length;if(splitCache.k===key)return splitCache.v;
-  const p=tr.p,n=p.length,cum=[0];for(let i=1;i<n;i++)cum.push(cum[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1])/10);const L=cum[n-1]||1;
-  // il delta si aggiorna circa ogni 5 s di giro: abbastanza spesso da seguirlo, abbastanza fermo da leggerlo con un'occhiata
-  const ns=Math.max(3,Math.min(12,Math.round((tr.ms||20000)/5000))),res=[];
-  for(let k=1;k<ns;k++){const f=k/ns;res.push({f,i:Math.max(0,cum.findIndex(c=>c>=f*L))})}
-  splitCache.k=key;splitCache.v=res;return res}
+// ===================== settori: da 4 a 8 per pista, il pilota sceglie quanti e dove =====================
+const SEC_MIN=4,SEC_MAX=8;
+const eqSplits=n=>{const o=[];for(let k=1;k<n;k++)o.push(k/n);return o};
+function secCount(tk){if(tk&&tk.sec&&tk.sec.n)return tk.sec.n;const ms=tk&&tk.trace&&tk.trace.ms;return ms?Math.max(SEC_MIN,Math.min(SEC_MAX,Math.round(ms/5000))):SEC_MIN}
+function secFracs(tk){const n=secCount(tk);return tk&&tk.sec&&tk.sec.f&&tk.sec.f.length===n-1?tk.sec.f:eqSplits(n)}
+const traceCum=tr=>{const p=tr.p,cum=[0];for(let i=1;i<p.length;i++)cum.push(cum[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1])/10);return cum};
+// confini dei settori come frazioni del giro; i = punto del tracciato (per disegnarli sulla mappa)
+function trackSplits(tk){const F=secFracs(tk),tr=tk&&tk.trace;if(!tr||!tr.p||tr.p.length<20)return F.map(f=>({f,i:null}));
+  const cum=traceCum(tr),L=cum[cum.length-1]||1;return F.map(f=>({f,i:Math.max(0,cum.findIndex(c=>c>=f*L))}))}
 function updateSector(){if(!lt.inLap){dev.sd=null;return}const t=now();
   if(!dev.sd||dev.sd.start!==lt.start){let val=null;const nl=lt.laps.length;
     // al traguardo il numero diventa il distacco finale del giro appena chiuso
     if(nl>=2)val=(lt.lastWasBest?lt.lastMs-lt.prevBest:lt.lastMs-lt.bestMs)/1000;
-    dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t}}
-  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track])||[1,2,3].map(k=>({f:k/4})),b=lt.best;
+    // il settore finale si chiude al traguardo: la barra del giro appena finito resta finché non chiudi il primo settore del nuovo
+    const o=dev.sd;dev.sdPrev=o&&val!=null&&o.res&&o.res.length===trackSplits(saved.tracks[dev.track]).length?o.res.concat([val-o.lastD]):null;
+    dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t,res:[],lastD:0}}
+  const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track]),b=lt.best;
   if(!lt.deltaValid||b.length<2)return;const tot=b[b.length-1][0];let moved=false;
-  while(sd.idx<sp.length&&lt.curDist>=sp[sd.idx].f*tot){sd.idx++;moved=true}
+  while(sd.idx<sp.length&&lt.curDist>=sp[sd.idx].f*tot){sd.idx++;moved=true;sd.res.push(lt.delta-sd.lastD);sd.lastD=lt.delta}
   if(moved){sd.val=lt.delta;sd.pred=lt.bestMs+lt.delta*1000;sd.at=t}}
 // ===================== ingresso GPS (telefono o demo) =====================
 function onGeo(lat,lon,acc,spdMs,hdg,t){
@@ -177,7 +180,7 @@ function onFix(f){
     if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;
       const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;applyMinLap();persist()}
     else if(tk&&!tk.trace){const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr){tk.trace=tr;persist()}}
-    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession();try{navigator.vibrate&&navigator.vibrate(rec?[80,60,80,60,80]:60)}catch(e){}}
+    const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession()}
 }
 
 let watchId=null;
@@ -481,9 +484,12 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
 // ---------- gara ----------
 function deltaTrend(){const Hh=dev.dHist||[];if(Hh.length<2)return 0;const a=Hh[0],b=Hh[Hh.length-1];return b[0]-a[0]>1200?(b[1]-a[1])/((b[0]-a[0])/1000):0}
 // barra LED: 10 segmenti, ognuno un decimo; a sinistra verde (guadagno), a destra rosso (perdita)
-function ledBar(y,d,valid){const n=10,gap=3,sw=(W-16-gap*(n-1))/n,lit=valid?Math.min(5,Math.round(Math.abs(d)/0.1)):0;
-  for(let i=0;i<n;i++){const x=8+i*(sw+gap),left=i<5,dist=left?4-i:i-5,on=valid&&dist<lit&&((d<0&&left)||(d>0&&!left));
-    rr(x,y,sw,8,2,on?(left?C.gain:C.loss):C.off)}}
+// barra dei settori: verde = quel tratto più veloce del giro migliore, rosso = più lento, grigio chiaro = dove sei adesso
+function sectorBar(y,valid){const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=4,sw=(W-16-gp*(ns-1))/ns,sd=dev.sd;
+  const prev=sd&&sd.idx===0&&dev.sdPrev,res=prev?dev.sdPrev:(sd&&sd.res)||[],cur=prev?-1:res.length;
+  for(let k=0;k<ns;k++){let c=C.off;
+    if(valid&&k<res.length){const r=res[k];c=r<-0.005?C.gain:r>0.005?C.loss:C.dim}else if(valid&&sd&&k===cur)c=C.faint;
+    rr(8+k*(sw+gp),y,sw,8,2,c)}}
 function bottomCells(y){const sec=saved.dmode!=='live',sd=dev.sd,three=W>=400&&(sec?lt.bestMs>0:lt.deltaValid),cells=[['Ultimo',lt.laps.length?fmt(lt.lastMs):'--',C.fg]];
   // in gara il colore è solo del delta grande: questi sono dati di riferimento, neutri
   if(three)cells.push(['Previsto',sec?(sd&&sd.idx>0?fmt(sd.pred):'--'):fmt(Math.max(0,lt.bestMs+lt.delta*1000)),C.fg]);
@@ -505,7 +511,7 @@ function drawRace(){
   if(!lt.line){icon('flag',W/2,top+56,28,C.dim);txt('Nessun traguardo',W/2,top+92,24,C.fg,'center',700);txt('Fermati per impostarlo',W/2,top+116,14,C.dim,'center',500);return}
   if(!lt.inLap){icon('arrowR',W/2,top+60,34,C.dim);txt('Passa sul traguardo',W/2,top+100,28,C.fg,'center',700);txt('Il giro parte appena lo attraversi',W/2,top+126,14,C.dim,'center',500);return}
   const sec=saved.dmode!=='live',sd=dev.sd,view=saved.view,cellsY=184,valid=sec?lt.bestMs>0:lt.deltaValid,d=sec?(sd?sd.val:null):lt.delta,dc=d<0?C.gainTxt:C.lossTxt;
-  ledBar(top+6,d||0,valid&&d!=null);
+  sectorBar(top+6,valid);
   const py=top+28,ph=cellsY-py,mid=py+ph/2+4;
   // tempo appena fatto, fermo per 4 s (come i cronometri da pista); poi torna il delta. Un tocco lo chiude subito.
   if(now()<dev.lapHold&&n){const first=n===1,g=lt.lastMs-lt.bestMs;
@@ -515,7 +521,7 @@ function drawRace(){
     else num(gap(g/1000)+' dal migliore',W/2,py+ph-18,22,g>0?C.lossTxt:C.gainTxt,'center',700,W-60);
     bottomCells(cellsY);hits.push({id:'hold',x:0,y:SB,w:W,h:H-SB,act:()=>dev.lapHold=0});return}
   if(view===0&&valid){
-    if(sec){const sp=trackSplits(saved.tracks[dev.track])||[0,0,0],ns=sp.length+1,age=now()-(sd?sd.at:0);
+    if(sec){const sp=trackSplits(saved.tracks[dev.track]),ns=sp.length+1,age=now()-(sd?sd.at:0);
       // il numero resta fermo fino al prossimo tratto; il colore delle cifre dice se guadagni o perdi
       panel(8,py,W-16,ph,'Delta',sd&&sd.idx>0?`settore ${sd.idx} di ${ns}`:(d!=null?'al traguardo':null),C.frame);
       if(d==null){num('—',W/2,mid-10,72,C.faint,'center',700,W-40);txt('Il delta arriva fra pochi secondi',W/2,py+ph-16,15,C.dim,'center',500)}
@@ -674,8 +680,22 @@ function drawTraceMini(tk,x,y,w,h){const tr=tk.trace,g=traceGeom(tr),sc=Math.min
   for(let i=1;i<g.P.length;i++){cx.beginPath();cx.moveTo(ox+g.P[i-1][0]*sc,oy-g.P[i-1][1]*sc);cx.lineTo(ox+g.P[i][0]*sc,oy-g.P[i][1]*sc);
     cx.strokeStyle=spdCol((g.P[i][2]-g.v0)/vr);cx.lineWidth=2.5;cx.stroke()}
   const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R;cx.beginPath();cx.arc(ox+(tk.lon-tr.o[1])*kx*sc,oy-(tk.lat-tr.o[0])*ky*sc,4,0,7);cx.fillStyle=C.accent;cx.fill()}
+function setSecs(tk,n,f){tk.sec={n,f:f||eqSplits(n)};persist()}
+function moveSecBoundary(tk,P,X,Y){const p=lastPt;let bj=-1,bd=30;P.forEach((q,j)=>{const d=Math.hypot(X(q[0])-p.x,Y(q[1])-p.y);if(d<bd){bd=d;bj=j}});
+  if(bj<0){toast('Tocca sopra la pista');return}const cum=traceCum(tk.trace),L=cum[cum.length-1]||1,fj=cum[bj]/L;
+  if(fj<0.03||fj>0.97){toast('Troppo vicino al traguardo');return}
+  const n=secCount(tk),F=secFracs(tk).slice();let k=0;F.forEach((f,i)=>{if(Math.abs(f-fj)<Math.abs(F[k]-fj))k=i});
+  F[k]=fj;F.sort((a,b)=>a-b);for(let i=1;i<F.length;i++)if(F[i]-F[i-1]<0.03){toast('Troppo vicino a un altro confine');return}
+  setSecs(tk,n,F);toast(`Fine del settore ${F.indexOf(fj)+1} spostata`)}
+function drawSecControls(tk,x,y,w){const n=secCount(tk),F=secFracs(tk),eq=eqSplits(n),manual=F.some((f,i)=>Math.abs(f-eq[i])>1e-6);
+  txt('Settori',x,y,12,C.dim,'left',600);
+  button('secDn',x,y+10,40,32,'',{icon:'down',disabled:n<=SEC_MIN,act:()=>setSecs(tk,n-1)});
+  num(String(n),x+w/2,y+26,22,C.fg,'center',700);
+  button('secUp',x+w-40,y+10,40,32,'',{icon:'up',disabled:n>=SEC_MAX,act:()=>setSecs(tk,n+1)});
+  if(manual)button('secEq',x,y+50,w,28,'Rimetti uguali',{ghost:true,size:13,act:()=>setSecs(tk,n)});
+  else txt('Tocca la pista per spostare',x,y+60,11,C.faint,'left',500)}
 function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
-  header(tk?tk.name:'Pista',()=>dev.screen='tracks','');
+  header(tk?tk.name:'Pista',()=>dev.screen='tracks',tr?'registrata il '+new Date(tr.d).toLocaleDateString('it-IT',{day:'numeric',month:'short'}):'');
   const top=SB+44;
   if(!tr){icon('map',W/2,top+46,26,C.faint);txt('Nessun tracciato per questa pista',W/2,top+82,18,C.fg,'center',700);
     txt('Si salva da solo quando fai un giro completo, e si aggiorna a ogni nuovo record',W/2,top+106,13,C.dim,'center',500);return}
@@ -691,14 +711,18 @@ function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&
   const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R,sx=X((tk.lon-tr.o[1])*kx),sy=Y((tk.lat-tr.o[0])*ky),h=tk.heading*D2R,dx=Math.sin(h),dy=-Math.cos(h),nx=-dy,ny=dx;
   cx.beginPath();cx.moveTo(sx-nx*13,sy-ny*13);cx.lineTo(sx+nx*13,sy+ny*13);cx.strokeStyle=C.fg;cx.lineWidth=2;cx.stroke();cx.beginPath();cx.arc(sx,sy,5,0,7);cx.fillStyle=C.accent;cx.fill();
   const ax=sx+dx*16,ay=sy+dy*16;cx.beginPath();cx.moveTo(ax+dx*7,ay+dy*7);cx.lineTo(ax-dx*3+nx*5,ay-dy*3+ny*5);cx.lineTo(ax-dx*3-nx*5,ay-dy*3-ny*5);cx.closePath();cx.fillStyle=C.fg;cx.fill();
-  {const sp=trackSplits(tk);if(sp)sp.forEach(q=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),5,0,7);cx.fillStyle=C.bg;cx.fill();cx.lineWidth=2;cx.strokeStyle=C.fg;cx.stroke()})}
+  {const sp=trackSplits(tk);sp.forEach((q,k)=>{const pt=P[Math.min(P.length-1,q.i)];if(!pt)return;cx.beginPath();cx.arc(X(pt[0]),Y(pt[1]),9,0,7);cx.fillStyle=C.fg;cx.fill();
+    num(String(k+1),X(pt[0]),Y(pt[1])+0.5,12,C.bg,'center',700)})}
+  // tocco sulla pista: il confine più vicino si sposta lì
+  hits.push({id:'secMove',x:mx,y:my,w:mw,h:mh,act:()=>moveSecBoundary(tk,P,X,Y)});
   // legenda velocità
   const ly=H-14,lx0=mx+60,lw=mw-120;for(let i=0;i<lw;i+=2){cx.fillStyle=spdCol(i/lw);cx.fillRect(lx0+i,ly-3,2,6)}
   num(Math.round(v0)+'',lx0-8,ly,13,C.dim,'right',600);num(Math.round(v1)+' km/h',lx0+lw+8,ly,13,C.dim,'left',600);
   // dati a destra
-  const rx=W-side+4,rows=[['Lunghezza',Math.round(len)+' m'],['Tempo del giro',fmt(tr.ms)],['Velocità massima',Math.round(v1)+' km/h'],['Velocità minima',Math.round(v0)+' km/h']];
-  rows.forEach(([l,v],i)=>{const y=top+12+i*37;txt(l,rx,y,12,C.dim,'left',600);num(v,rx,y+16,20,i===1?C.gainTxt:C.fg,'left',700,side-16);if(i<3)hline(rx,y+28,side-16,C.line)});
-  const d=new Date(tr.d);txt('Registrato il '+d.toLocaleDateString('it-IT',{day:'numeric',month:'short'}),rx,H-14,11,C.faint,'left',500)}
+  const rx=W-side+4,rows=[['Lunghezza',Math.round(len)+' m'],['Tempo del giro',fmt(tr.ms)]];
+  rows.forEach(([l,v],i)=>{const y=top+12+i*37;txt(l,rx,y,12,C.dim,'left',600);num(v,rx,y+16,20,i===1?C.gainTxt:C.fg,'left',700,side-16);hline(rx,y+28,side-16,C.line)});
+  drawSecControls(tk,rx,top+12+2*37,side-16,P,X,Y);
+}
 
 // ---------- conferme ----------
 function drawConfirm(title,sub,yesLbl,act,back='ready'){statusBar('','');
@@ -768,6 +792,7 @@ function autoScreens(){const s=dev.screen;
   if(s==='wizard'&&dev.wiz===3&&now()-dev.wizDoneAt>2500)dev.screen=dev.speed>15?'race':'ready'}
 
 // ===================== tocco =====================
+let lastPt={x:0,y:0};
 const pt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}};
 const hitAt=p=>{for(let i=hits.length-1;i>=0;i--){const h=hits[i];if(p.x>=h.x&&p.x<=h.x+h.w&&p.y>=h.y&&p.y<=h.y+h.h)return h}return null};
 cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}
@@ -775,8 +800,8 @@ cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);press
 cv.addEventListener('pointermove',e=>{if(!drag)return;const p=pt(e),dy=p.y-drag.y0;if(!drag.on&&Math.abs(dy)>6){drag.on=true;pressed=null}
   if(drag.on){const t=performance.now(),dt=Math.max(1,t-drag.lt);drag.v=0.6*drag.v+0.4*(-(p.y-drag.ly)/dt*16.7);drag.ly=p.y;drag.lt=t;
     dev[drag.key]=Math.max(0,Math.min(drag.max,drag.s0-dy))}});
-cv.addEventListener('pointerup',e=>{if(drag&&drag.on){if(performance.now()-drag.lt<80)dev[drag.key+'V']=drag.v;drag=null;pressed=null;return}drag=null;
-  const h=hitAt(pt(e));if(h&&h.id===pressed){if(h.dis){if(h.id==='wok')toast(dev.speed>5?'Prima fermati':'Aspetta il GPS')}else if(h.act){h.act();try{navigator.vibrate&&navigator.vibrate(15)}catch(x){}}}pressed=null;setTimeout(goFull,50)});
+cv.addEventListener('pointerup',e=>{lastPt=pt(e);if(drag&&drag.on){if(performance.now()-drag.lt<80)dev[drag.key+'V']=drag.v;drag=null;pressed=null;return}drag=null;
+  const h=hitAt(pt(e));if(h&&h.id===pressed){if(h.dis){if(h.id==='wok')toast(dev.speed>5?'Prima fermati':'Aspetta il GPS')}else if(h.act){h.act()}}pressed=null;setTimeout(goFull,50)});
 cv.addEventListener('pointercancel',()=>{pressed=null;drag=null});
 
 // ===================== avvio =====================
