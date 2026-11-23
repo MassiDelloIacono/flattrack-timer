@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v33';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v34';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -426,8 +426,8 @@ function header(title,backAct,right){
   hline(0,SB+40,W,C.line)}
 // barra schede in basso (riepilogo)
 function tabBar(){const th=TB,y=H-th,tw=W/3,n=lt.laps.length;hline(0,y,W,C.line);
-  [['laps','laps','Giri',n?String(n):'',()=>{dev.screen='laps';dev.scroll=0;dev.scrollV=0}],
-   ['tracks','pin','Piste',saved.tracks.length?String(saved.tracks.length):'',openTracks],
+  [['laps','laps','Giri','',()=>{dev.screen='laps';dev.scroll=0;dev.scrollV=0}],
+   ['tracks','pin','Piste','',openTracks],
    ['set','gear','Opzioni','',()=>dev.screen='settings']].forEach(([id,ic,l,cnt,act],k)=>{const x=k*tw,down=pressed===id,cy=y+th/2+1;
     if(down){cx.fillStyle=C.btnDown;cx.fillRect(x,y+1,tw,th-1)}
     cx.font=FL(15,600);const lw=cx.measureText(l).width;cx.font=FN(15,600);const cw=cnt?cx.measureText(cnt).width+6:0,tot=14+7+lw+cw,sx=x+(tw-tot)/2;
@@ -471,10 +471,10 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
       hits.push({id:'heroMap',x:W-24-mw,y:py,w:mw+14,h:ph,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
     num(fmt(lt.bestMs),nx,py+ph/2+(rec?-6:2),rec?66:76,C.gainTxt,'left',700,W-60-mw);
     if(rec){txt('Record della pista',nx,py+ph-14,12,C.dim,'left',600);num(fmt(tk.record),nx+112,py+ph-14,15,C.fg,'left',700)}
-    const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg]],nT=turnsOf(lt.laps,lt.ends).length;
-    const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-16)/3;
+    const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg],['Turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
+    const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-24)/4;
     cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
-      panel(x,cy,pw,chh,l,k===2&&nT>1?`${nT} turni`:null,C.line);if(g){cx.font=FL(12,600);txt(g,x+6+cx.measureText(l).width+8,cy+4,12,C.lossTxt,'left',700)}
+      panel(x,cy,pw,chh,l,null,C.line);if(g){cx.font=FL(12,600);txt(g,x+6+cx.measureText(l).width+8,cy+4,12,C.lossTxt,'left',700)}
       num(v,x+6,cy+chh/2+4,28,c,'left',700,pw-16)})}
   tabBar()}
 
