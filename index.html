@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v20';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
+const VERSION='v21';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -326,8 +326,8 @@ function icon(name,x,y,s,col){cx.save();cx.translate(x,y);cx.strokeStyle=col;cx.
 
 // ---------- pulsanti ----------
 // riquadro a filo sottile con etichetta incastrata nel bordo superiore (sx) ed eventuale valore a destra
-function panel(x,y,w,h,label,labelR,col){col=col||C.frame;rr(x,y,w,h,8,null,col,1.5);
-  const tab=(t,tx,al)=>{cx.font=FL(12,700);const lw=cx.measureText(t).width+10,bx=al==='right'?tx-lw+5:tx-5;cx.fillStyle=C.bg;cx.fillRect(bx,y-3,lw,6);txt(t,tx,y,12,col===C.line?C.dim:col,al,700)};
+function panel(x,y,w,h,label,labelR,col,colR){col=col||C.frame;rr(x,y,w,h,8,null,col,1.5);
+  const tab=(t,tx,al)=>{cx.font=FL(12,700);const lw=cx.measureText(t).width+10,bx=al==='right'?tx-lw+5:tx-5;cx.fillStyle=C.bg;cx.fillRect(bx,y-3,lw,6);txt(t,tx,y,12,(al==='right'&&colR)?colR:(col===C.line?C.dim:col),al,700)};
   if(label)tab(label,x+16,'left');if(labelR)tab(labelR,x+w-16,'right')}
 function button(id,x,y,w,h,label,opt={}){const down=pressed===id,dis=opt.disabled;
   let bg=down?C.btnDown:null,fg=dis?C.faint:C.fg,stroke=dis?C.off:C.line;
@@ -346,9 +346,14 @@ function segmented(id,x,y,w,h,opts,cur,set){const n=opts.length,sw=w/n;rr(x,y,w,
   opts.forEach(([l,v],k)=>{const sx=x+k*sw,sel=cur===v;if(sel)rr(sx+2,y+2,sw-4,h-4,5,C.selWash,C.accent,1.5);else if(k&&cur!==opts[k-1][1])cx.fillStyle=C.line,cx.fillRect(sx,y+7,1,h-14);
     fitT(l,sx+sw/2,y+h/2+1,15,sel?C.accentTxt:C.dim,sw-8,'center',700);hits.push({id:id+k,x:sx,y,w:sw,h,act:()=>set(v)})})}
 
-function fmt(ms,big){if(!ms&&ms!==0)return'--';const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,c=Math.floor(ms%1000/10),d=Math.floor(ms%1000/100);
-  return m>0?(big?`${m}:${String(s).padStart(2,'0')}.${d}`:`${m}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`):`${s}.${String(c).padStart(2,'0')}`}
-const fmt1=ms=>fmt(ms,true).replace(/(\.\d)\d$/,'$1');
+const pad2=v=>String(v).padStart(2,'0');
+// tempo sul giro: 1:24.234 (millesimi) oppure 1:24.23 (centesimi) a scelta nelle opzioni
+function fmt(ms){if(!ms&&ms!==0)return'--';ms=Math.max(0,Math.round(ms));const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,
+  fr=saved.dec===2?pad2(Math.floor(ms%1000/10)):String(ms%1000).padStart(3,'0');return m>0?`${m}:${pad2(s)}.${fr}`:`${s}.${fr}`}
+// tempo che scorre in gara: decimi, così le cifre non "frullano"
+const fmt1=ms=>{ms=Math.max(0,ms);const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,d=Math.floor(ms%1000/100);return m>0?`${m}:${pad2(s)}.${d}`:`${s}.${d}`};
+// distacco tra giri chiusi, con la stessa precisione dei tempi
+const gap=v=>(v<0?'−':'+')+Math.abs(v).toFixed(saved.dec===2?2:3);
 const sgn=v=>(v<0?'−':'+')+Math.abs(v).toFixed(2);
 
 // ---------- barra di stato ----------
@@ -368,6 +373,7 @@ function statusBar(center,lapTxt){
   let rx=W-8;
   if(dev.battery!=null){const b=Math.round(dev.battery);rr(rx-22,7,20,10,2,null,C.dim);cx.fillStyle=C.dim;cx.fillRect(rx-2,10,2,4);
     cx.fillStyle=b<20?C.loss:dev.charging?C.gainTxt:C.fg;cx.fillRect(rx-20,9,16*b/100,6);rx-=28}
+  const dt=new Date(),hm=pad2(dt.getHours())+':'+pad2(dt.getMinutes());num(hm,rx,12.5,14,C.dim,'right',600);rx-=numMetrics(hm,14,600).tot+12;
   if(lapTxt){num(lapTxt,rx,12.5,16,C.fg,'right',700)}}
 // intestazione delle sottoschermate: ‹ titolo
 function header(title,backAct,right){
@@ -416,12 +422,16 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,top=SB
     panel(10,py,pw,ph,'Record della pista');num(tk&&tk.record?fmt(tk.record):'--',10+pw/2,py+ph/2+2,30,tk&&tk.record?C.gainTxt:C.faint,'center',700);
     panel(18+pw,py,pw,ph,'Giro minimo');num(saved.minLap+' s',18+pw*1.5,py+ph/2+2,30,C.fg,'center',700)}
   else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs;
-    const py=top+16,ph=104;panel(10,py,W-20,ph,'Miglior giro',`giro ${lt.bestNo}`);
-    num(fmt(lt.bestMs),W/2,py+ph/2+(rec?-6:2),rec?70:80,C.gainTxt,'center',700,W-60);
-    if(rec){txt('Record della pista',W/2-6,py+ph-14,12,C.dim,'right',600);num(fmt(tk.record),W/2+2,py+ph-14,15,C.fg,'left',700)}
+    const py=top+16,ph=104,map=tk&&tk.trace&&W>=440,mw=map?Math.min(170,W*0.3):0,nx=map?(14+W-24-mw)/2:W/2;
+    panel(10,py,W-20,ph,'Miglior giro',`giro ${lt.bestNo}`);
+    if(map){cx.fillStyle=C.line;cx.fillRect(W-24-mw,py+14,1,ph-28);drawTraceMini(tk,W-18-mw,py+10,mw-4,ph-20);
+      hits.push({id:'heroMap',x:W-24-mw,y:py,w:mw+14,h:ph,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
+    num(fmt(lt.bestMs),nx,py+ph/2+(rec?-6:2),rec?66:76,C.gainTxt,'center',700,W-60-mw);
+    if(rec){txt('Record della pista',nx-6,py+ph-14,12,C.dim,'right',600);num(fmt(tk.record),nx+2,py+ph-14,15,C.fg,'left',700)}
     const cells=[['Ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['Media',fmt(avg),C.fg],['Giri',String(n),C.fg]];
     const cy=py+ph+14,chh=bot-cy-10,pw=(W-20-16)/3;
-    cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8);panel(x,cy,pw,chh,l,null,C.line);num(v,x+pw/2,cy+chh/2+2,28,c,'center',700,pw-16)})}
+    cells.forEach(([l,v,c],k)=>{const x=10+k*(pw+8),g=k===0&&lt.lastMs!==lt.bestMs?gap((lt.lastMs-lt.bestMs)/1000):null;
+      panel(x,cy,pw,chh,l,g,C.line,C.lossTxt);num(v,x+pw/2,cy+chh/2+2,28,c,'center',700,pw-16)})}
   tabBar()}
 
 // ---------- gara ----------
@@ -443,7 +453,7 @@ function drawRace(){
     cx.fillStyle=C.gainDeep;cx.fillRect(0,SB,W,H-SB);
     txt(dev.trackRec?'Record della pista':'Miglior giro',W/2,SB+26,20,'#ffffff','center',700);
     num(fmt(lt.lastMs),W/2,SB+100,116,'#ffffff','center',700,W-24);
-    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(sgn((lt.lastMs-ref)/1000),W/2,SB+178,28,'#c8ffd9','center',700);
+    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000),W/2,SB+178,28,'#c8ffd9','center',700);
     hits.push({id:'flash',x:0,y:SB,w:W,h:H-SB,act:()=>dev.flashUntil=0});return}
   let top=SB;
   if(lost){cx.fillStyle=C.lossDeep;cx.fillRect(0,SB,W,24);fitT('GPS perso: tempi sospesi finché torna il segnale',W/2,SB+12,13,'#ffffff',W-20,'center',700);top+=24}
@@ -487,7 +497,7 @@ function drawLaps(){statusBar('','');const L=lt.laps,n=L.length;
     if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,rh)}
     num(String(i+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
     if(i===n-1&&!isB){const tw=numMetrics(fmt(ms),21,700).tot;rr(58+tw,cy-8,46,16,3,null,C.dim);txt('Ultimo',81+tw,cy+0.5,11,C.dim,'center',600)}
-    if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(sgn((ms-bestMs)/1000),W-14,cy,17,C.lossTxt,'right',600);
+    if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-bestMs)/1000),W-14,cy,17,C.lossTxt,'right',600);
     hline(12,y+rh-1,W-24,C.line)}
   endList('scroll',0,top,W,ah,n*rh)}
 
@@ -548,16 +558,26 @@ function drawTracks(){statusBar('','');const T=saved.tracks,n=T.length;
 // ---------- mappa della pista ----------
 const SPD_SLOW='#ff453a',SPD_MID='#ffc400';
 function spdCol(k){const fast=C.gain;return k<0.5?mix(SPD_SLOW,SPD_MID,k*2):mix(SPD_MID,fast,(k-0.5)*2)}
+function traceGeom(tr){const R0=tr.p.map(q=>[q[0]/10,q[1]/10,q[2]]),nP=R0.length;
+  // media mobile su 5 punti solo per il disegno (i dati salvati restano quelli misurati); il giro è chiuso
+  const P=R0.map((q,i)=>{let sx=0,sy=0;for(let k=-2;k<=2;k++){const r=R0[(i+k+nP)%nP];sx+=r[0];sy+=r[1]}return[sx/5,sy/5,q[2]]});
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,v0=1e9,v1=0,len=0;
+  P.forEach((q,i)=>{x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1]);v0=Math.min(v0,q[2]);v1=Math.max(v1,q[2]);
+    if(i)len+=Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1])});
+  return{P,x0,x1,y0,y1,v0,v1,len}}
+// miniatura della pista dentro un riquadro (x,y,w,h)
+function drawTraceMini(tk,x,y,w,h){const tr=tk.trace,g=traceGeom(tr),sc=Math.min((w-8)/Math.max(1,g.x1-g.x0),(h-8)/Math.max(1,g.y1-g.y0)),
+  ox=x+w/2-(g.x0+g.x1)/2*sc,oy=y+h/2+(g.y0+g.y1)/2*sc,vr=Math.max(1,g.v1-g.v0);
+  cx.lineCap='round';cx.lineJoin='round';
+  for(let i=1;i<g.P.length;i++){cx.beginPath();cx.moveTo(ox+g.P[i-1][0]*sc,oy-g.P[i-1][1]*sc);cx.lineTo(ox+g.P[i][0]*sc,oy-g.P[i][1]*sc);
+    cx.strokeStyle=spdCol((g.P[i][2]-g.v0)/vr);cx.lineWidth=2.5;cx.stroke()}
+  const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R;cx.beginPath();cx.arc(ox+(tk.lon-tr.o[1])*kx*sc,oy-(tk.lat-tr.o[0])*ky*sc,3.5,0,7);cx.fillStyle=C.fg;cx.fill()}
 function drawTrackMap(){statusBar('','');const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
   header(tk?tk.name:'Pista',()=>dev.screen='tracks','');
   const top=SB+44;
   if(!tr){icon('map',W/2,top+46,26,C.faint);txt('Nessun tracciato per questa pista',W/2,top+82,18,C.fg,'center',700);
     txt('Si salva da solo quando fai un giro completo, e si aggiorna a ogni nuovo record',W/2,top+106,13,C.dim,'center',500);return}
-  const R0=tr.p.map(q=>[q[0]/10,q[1]/10,q[2]]),nP=R0.length;
-  // media mobile su 5 punti solo per il disegno (i dati salvati restano quelli misurati); il giro è chiuso
-  const P=R0.map((q,i)=>{let sx=0,sy=0;for(let k=-2;k<=2;k++){const r=R0[(i+k+nP)%nP];sx+=r[0];sy+=r[1]}return[sx/5,sy/5,q[2]]});let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,v0=1e9,v1=0,len=0;
-  P.forEach((q,i)=>{x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1]);v0=Math.min(v0,q[2]);v1=Math.max(v1,q[2]);
-    if(i)len+=Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1])});
+  const{P,x0,x1,y0,y1,v0,v1,len}=traceGeom(tr);
   const side=Math.min(170,W*0.32),mw=W-side-20,mh=H-top-30,mx=10,my=top,sc=Math.min((mw-30)/Math.max(1,x1-x0),(mh-30)/Math.max(1,y1-y0)),
     ox=mx+mw/2-(x0+x1)/2*sc,oy=my+mh/2+(y0+y1)/2*sc,X=x=>ox+x*sc,Y=y=>oy-y*sc,vr=Math.max(1,v1-v0);
   panel(mx,my+6,mw,mh-2,'Tracciato del giro record',null,C.line);
@@ -592,7 +612,7 @@ function shareLaps(){const L=lt.laps;if(!L.length){toast('Nessun giro da condivi
 
 // ---------- opzioni ----------
 function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);
-  const top=SB+41,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?6:5,ah=H-top,content=nRows*rh+4;
+  const top=SB+41,rh=34.8,cw=Math.min(240,W-150),cx0=W-12-cw,ext=saved.source==='ble',nRows=ext?7:6,ah=H-top,content=nRows*rh+4;
   const off=listArea('sscroll',0,top,W,ah,content),h0=hits.length;let i=0;
   const row=(lbl,hint)=>{const y=top+1+i*rh-off;txt(lbl,14,y+rh/2-(hint?6:0),16,C.fg,'left',600);if(hint)txt(hint,14,y+rh/2+9,11,C.dim,'left',500);
     if(i<nRows-1)hline(12,y+rh,W-24,C.line);i++;return y+4};
@@ -606,6 +626,8 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
   num(saved.minLap+' s',cx0+cw/2,y+(rh-8)/2+1,18,C.fg,'center',700);
   button('imin',cx0+cw-44,y,44,rh-8,'',{icon:'up',act:()=>{saved.minLap=Math.min(60,saved.minLap+1);lt.minLapMs=saved.minLap*1000;persist()}});
   y=row('Vista in gara');segmented('sview',cx0,y,cw,rh-8,[['Delta',0],['Tempo',1]],saved.view,v=>{saved.view=v;persist()});
+  y=row('Decimali dei tempi',(saved.dec===2?'19.75':'19.750')+', il millesimo è indicativo');
+  segmented('sdec',cx0,y,cw,rh-8,[['Centesimi',2],['Millesimi',3]],saved.dec===2?2:3,v=>{saved.dec=v;persist()});
   y=row('Velocità in gara');segmented('sspd',cx0,y,cw,rh-8,[['Nascosta',false],['Visibile',true]],!!saved.showSpeed,v=>{saved.showSpeed=v;persist()});
   y=row('Schermo',(saved.theme||'auto')==='auto'?(isDay()?'ora giorno':'ora sera'):'');
   segmented('sth',cx0,y,cw,rh-8,[['Auto','auto'],['Giorno','giorno'],['Sera','sera']],saved.theme||'auto',v=>{saved.theme=v;dayCache.t=0;persist()});
