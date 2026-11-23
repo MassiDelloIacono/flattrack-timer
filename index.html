@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v38';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v39';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -99,8 +99,10 @@ function archiveSession(){const S=saved.session;if(!S||!S.laps||!S.laps.length)r
 if(saved.session&&saved.session.laps&&saved.session.laps.length&&dayKey(saved.session.date)!==dayKey(Date.now()))archiveSession();
 if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.session.laps;lt.laps=L.slice();lt.lastMs=L[L.length-1];
   lt.ends=L.map((_,i)=>(saved.session.ends||[])[i]||null);
+  if(saved.session.best&&saved.session.best.length>1)lt.best=saved.session.best;
   L.forEach((ms,i)=>{if(!lt.bestMs||ms<lt.bestMs){lt.bestMs=ms;lt.bestNo=i+1}})}
-const saveSession=()=>{saved.session={laps:lt.laps,ends:lt.ends,track:dev.track,trackName:trackName(),date:new Date().toISOString()};persist()};
+// salvo anche la traccia del giro migliore: senza, dopo un riavvio dell'app delta e settori restavano spenti
+const saveSession=()=>{saved.session={laps:lt.laps,ends:lt.ends,best:lt.best.map(q=>[Math.round(q[0]*100)/100,Math.round(q[1])]),track:dev.track,trackName:trackName(),date:new Date().toISOString()};persist()};
 function closeDay(){saveSession();const ok=archiveSession();lt.resetSession();saveSession();return ok}
 // giro minimo: in automatico metà del record di quella pista (ovale e TT hanno valori diversi da soli)
 function effMinLap(){const tk=saved.tracks[dev.track];if(saved.minLapAuto!==false&&tk&&tk.record)return Math.max(4,Math.round(tk.record*0.5/1000));return saved.minLap}
@@ -128,10 +130,10 @@ function trackSplits(tk){const F=secFracs(tk),tr=tk&&tk.trace;if(!tr||!tr.p||tr.
 function updateSector(){if(!lt.inLap){dev.sd=null;return}const t=now();
   if(!dev.sd||dev.sd.start!==lt.start){let val=null;const nl=lt.laps.length;
     // al traguardo il numero diventa il distacco finale del giro appena chiuso
-    if(nl>=2)val=(lt.lastWasBest?lt.lastMs-lt.prevBest:lt.lastMs-lt.bestMs)/1000;
+    const o0=dev.sd;if(nl>=2&&o0&&nl===o0.lapsN+1)val=(lt.lastWasBest?lt.lastMs-lt.prevBest:lt.lastMs-lt.bestMs)/1000;
     // il settore finale si chiude al traguardo: la barra del giro appena finito resta finché non chiudi il primo settore del nuovo
     const o=dev.sd;dev.sdPrev=o&&val!=null&&o.res&&o.res.length===trackSplits(saved.tracks[dev.track]).length?o.res.concat([val-o.lastD]):null;
-    dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t,res:[],lastD:0}}
+    dev.sd={start:lt.start,idx:0,val,pred:0,at:val==null?0:t,res:[],lastD:0,lapsN:nl}}
   const sd=dev.sd,sp=trackSplits(saved.tracks[dev.track]),b=lt.best;
   if(!lt.deltaValid||b.length<2)return;const tot=b[b.length-1][0];let moved=false;
   while(sd.idx<sp.length&&lt.curDist>=sp[sd.idx].f*tot){sd.idx++;moved=true;sd.res.push(lt.delta-sd.lastD);sd.lastD=lt.delta}
