@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v37';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v38';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -501,10 +501,14 @@ function drawRace(){
   const tNow=lt.cur(gpsTime()),n=lt.laps.length,lost=!dev.fix;
   statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'');
   if(now()<dev.flashUntil&&n){
-    cx.fillStyle=C.gainDeep;cx.fillRect(0,SB,W,H-SB);
-    txt(dev.trackRec?'Record della pista':'Miglior giro',W/2,SB+26,20,'#ffffff','center',700);
-    num(fmt(lt.lastMs),W/2,SB+100,116,'#ffffff','center',700,W-24);
-    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000),W/2,SB+178,28,'#c8ffd9','center',700);
+    // giro migliore o record: niente schermo pieno, i settori lampeggiano verdi come led e il tempo del giro è verde
+    const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=4,sw=(W-16-gp*(ns-1))/ns,on=Math.floor((dev.flashUntil-now())/280)%2===0;
+    for(let k=0;k<ns;k++)rr(8+k*(sw+gp),SB+4,sw,12,3,on?C.gain:C.off);
+    const py=SB+26,ph=150,mid=py+ph/2+4;
+    panel(8,py,W-16,ph,dev.trackRec?'Record della pista':'Miglior giro',null,C.frame);
+    num(fmt(lt.lastMs),W/2,mid-16,96,C.gainTxt,'center',700,W-40);
+    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000)+(dev.trackRec?' sul vecchio record':' sul migliore di prima'),W/2,py+ph-36,18,C.gainTxt,'center',600,W-60);
+    bottomCells(184);
     hits.push({id:'flash',x:0,y:SB,w:W,h:H-SB,act:()=>dev.flashUntil=0});return}
   let top=SB;
   if(lost){cx.fillStyle=C.lossDeep;cx.fillRect(0,SB,W,24);fitT('GPS perso: tempi sospesi finché torna il segnale',W/2,SB+12,13,'#ffffff',W-20,'center',700);top+=24}
