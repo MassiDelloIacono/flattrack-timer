@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v52';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v53';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -348,7 +348,7 @@ const FL=(s,w=500)=>`${Math.min(w,600)} ${s}px "Barlow","Roboto","Helvetica Neue
 const F=FN;
 let hits=[],pressed=null;
 function txt(t,x,y,size,col,al='left',w=600,fam='l'){cx.font=fam==='n'?FN(size,w):fam==='m'?FM(size):FL(size,w);cx.fillStyle=col;cx.textAlign=al;cx.textBaseline='middle';cx.fillText(t,x,y)}
-function fitT(t,x,y,size,col,maxW,al='left',w=600,fam='l'){const f=fam==='n'?FN:FL;cx.font=f(size,w);while(cx.measureText(t).width>maxW&&size>9){size--;cx.font=f(size,w)}
+function fitT(t,x,y,size,col,maxW,al='left',w=600,fam='l'){const f=fam==='n'?FN:fam==='m'?((z)=>FM(z)):FL;cx.font=f(size,w);while(cx.measureText(t).width>maxW&&size>9){size--;cx.font=f(size,w)}
   txt(t,x,y,size,col,al,w,fam);return cx.measureText(t).width}
 const isDig=ch=>ch>='0'&&ch<='9';
 function numMetrics(t,size,w){cx.font=FN(size,w);let dw=0;for(const d of '0123456789')dw=Math.max(dw,cx.measureText(d).width);
@@ -573,46 +573,59 @@ function drawRace(){
   if(valid){hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}}
 
 // ---------- liste trascinabili ----------
-let scrollZone=null,drag=null;
+let scrollZone=null,drag=null,zones=[];
 function listArea(key,x,y,w,h,content){const max=Math.max(0,content-h);let v=dev[key]||0;
   if(!drag&&dev[key+'V']){v+=dev[key+'V'];dev[key+'V']*=0.92;if(Math.abs(dev[key+'V'])<0.3||v<0||v>max)dev[key+'V']=0}
-  v=Math.max(0,Math.min(max,v));dev[key]=v;scrollZone={key,x,y,w,h,max};
+  v=Math.max(0,Math.min(max,v));dev[key]=v;scrollZone={key,x,y,w,h,max};zones.push(scrollZone);
   cx.save();cx.beginPath();cx.rect(x,y,w,h);cx.clip();return v}
 function endList(key,x,y,w,h,content){cx.restore();const max=Math.max(0,content-h);if(!max)return;
   const bh=Math.max(18,h*h/content),by=y+(h-bh)*(dev[key]/max);rr(x+w-4,by,3,bh,1.5,C.faint)}
 
 // ---------- giri, divisi per turno ----------
 function lapLabel(i,L,E){const T=turnsOf(L,E);if(T.length<2)return`giro ${i+1}`;for(let k=0;k<T.length;k++){const j=T[k].indexOf(i);if(j>=0)return`turno ${k+1}, giro ${j+1}`}return''}
-function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=SB+41,ah=H-top,hh=34,rh=28,multi=K&&K.some(k=>k!==K[0]);
-  // migliore di ogni pista: ovale e TT non si confrontano tra loro
-  const bestOf={};L.forEach((ms,i)=>{const k=K?K[i]:'';if(bestOf[k]==null||ms<L[bestOf[k]])bestOf[k]=i});
-  const rows=[];for(let k=T.length-1;k>=0;k--){rows.push({h:k});for(let j=T[k].length-1;j>=0;j--)rows.push({i:T[k][j],j})}
-  const content=rows.reduce((a,r)=>a+(r.h!=null?hh:rh),0),off=listArea(key,0,top,W,ah,content);let y=top-off;
-  for(const r of rows){const h=r.h!=null?hh:rh;if(y+h>=top&&y<=H){const cy=y+h/2;
-    if(r.h!=null){const t=T[r.h],tl=t.map(i=>L[i]),tb=Math.min(...tl),avg=tl.reduce((a,b)=>a+b,0)/tl.length,ttl=T.length>1?`Turno ${r.h+1}`:'Turno unico';
-      cx.fillStyle=C.surface;cx.fillRect(0,y,W,h);txt(ttl,14,cy,15,C.fg,'left',700);
-      const st=E&&E[t[0]]?new Date(E[t[0]]-L[t[0]]):null;cx.font=FL(15,700);let lx=24+cx.measureText(ttl).width;
-      if(st){const ts=st.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});txt(ts,lx,cy+1,12,C.faint,'left',500);cx.font=FL(12,500);lx+=cx.measureText(ts).width+10}
-      num(fmt(tb),W-14,cy,16,C.fg,'right',700);const bw=numMetrics(fmt(tb),16,700).tot;
-      txt('migliore',W-22-bw,cy+1,12,C.dim,'right',500);cx.font=FL(12,500);
-      const mx=W-30-bw-cx.measureText('migliore').width-16;num(fmt(avg),mx,cy,16,C.fg,'right',700);const aw=numMetrics(fmt(avg),16,700).tot;
-      txt('media',mx-8-aw,cy+1,12,C.dim,'right',500);cx.font=FL(12,500);const gx=mx-16-aw-cx.measureText('media').width;
-      txt(tl.length===1?'1 giro':`${tl.length} giri`,gx,cy+1,13,C.dim,'right',600);cx.font=FL(13,600);
-      if(multi)fitT(K[t[0]],lx,cy+1,12,C.accentTxt,gx-cx.measureText(`${tl.length} giri`).width-12-lx,'left',600)}
-    else{const i=r.i,ms=L[i],bi=bestOf[K?K[i]:''],isB=i===bi;
-      if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,h)}
-      num(String(r.j+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
-      if(live&&i===n-1&&!isB){const tw=numMetrics(fmt(ms),21,700).tot;txt('ultimo',58+tw,cy+1,12,C.faint,'left',500)}
-      if(isB)txt(multi?'Migliore di '+K[i]:'Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-L[bi])/1000),W-14,cy,17,C.lossTxt,'right',600);
-      hline(12,y+h-1,W-24,C.line)}}
-    y+=h}
-  endList(key,0,top,W,ah,content)}
+function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=SB+44,multi=K&&K.some(k=>k!==K[0]);
+  const kOf=i=>K?K[i]:'',bestOf={};L.forEach((ms,i)=>{const k=kOf(i);if(bestOf[k]==null||ms<L[bestOf[k]])bestOf[k]=i});
+  // turno scelto: se non l'hai toccato segue l'ultimo
+  let sel=dev[key+'Sel'];if(sel==null||sel>=T.length)sel=T.length-1;
+  const lw=Math.min(158,W*0.31),ch=multi?52:44,gp=4,ah=H-top-6;
+  // ---- turni (dal più recente) ----
+  const tc=T.length*(ch+gp),toff=listArea(key+'T',6,top,lw,ah,tc);
+  for(let r=0;r<T.length;r++){const k=T.length-1-r,t=T[k],y=top+r*(ch+gp)-toff;if(y+ch<top||y>H)continue;
+    const tl=t.map(i=>L[i]),tb=Math.min(...tl),isS=k===sel,isTB=t.indexOf(bestOf[kOf(t[0])])>=0;
+    if(isS){rr(6,y,lw,ch,10,C.btn);rr(6,y+8,3,ch-16,1.5,C.accent)}
+    const st=E&&E[t[0]]?new Date(E[t[0]]-L[t[0]]).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}):'';
+    txt(T.length>1?`Turno ${k+1}`:'Turno unico',16,y+12,13,C.fg,'left',700);cx.font=FL(13,700);
+    if(st)txt(st,22+cx.measureText(T.length>1?`Turno ${k+1}`:'Turno unico').width,y+12,10,C.faint,'left',500,'m');
+    txt(tl.length===1?'1 giro':`${tl.length} giri`,lw,y+12,10,C.dim,'right',500,'m');
+    if(multi)fitT(kOf(t[0]),16,y+ch-12,10,C.accentTxt,lw-90,'left',500,'m');
+    num(fmt(tb),lw,y+(multi?ch-13:ch-13),17,isTB?C.gainTxt:C.fg,'right',700);
+    // mini grafico del turno: più bassa la barra, più vicino al migliore
+    if(!multi&&tl.length>1){const bw=Math.min(6,(lw-104)/tl.length),gap0=L[bestOf[kOf(t[0])]];
+      tl.forEach((ms,j)=>{const hh=2+10*Math.min(1,(ms-gap0)/1000);rr(16+j*(bw+1.5),y+ch-7-hh,bw,hh,1,ms===gap0?C.gain:C.faint)})}
+    const vy=Math.max(y,top),vh=Math.min(y+ch,H)-vy;if(vh>6)hits.push({id:key+'t'+k,x:0,y:vy,w:lw+8,h:vh,act:()=>{dev[key+'Sel']=k;dev[key+'L']=0;dev[key+'LV']=0}})}
+  endList(key+'T',6,top,lw,ah,tc);
+  // ---- giri del turno scelto ----
+  const px=lw+14,pw=W-px-6,t=T[sel],tl=t.map(i=>L[i]),tb=L[bestOf[kOf(t[0])]],avg=tl.reduce((a,b)=>a+b,0)/tl.length;
+  rr(px,top,pw,ah,12,C.surface);
+  txt(T.length>1?`Turno ${sel+1}`:'Turno unico',px+12,top+14,14,C.fg,'left',700);cx.font=FL(14,700);
+  if(multi)fitT(kOf(t[0]),px+20+cx.measureText(T.length>1?`Turno ${sel+1}`:'Turno unico').width,top+14,10,C.accentTxt,pw*0.35,'left',500,'m');
+  num(fmt(avg),px+pw-12,top+14,15,C.fg,'right',700);txt('media',px+pw-18-numMetrics(fmt(avg),15,700).tot,top+15,10,C.dim,'right',500,'m');
+  const ly=top+28,lh=ah-30,rh=24,spread=Math.max(0.3,(Math.max(...tl)-tb)/1000),lc=tl.length*rh,loff=listArea(key+'L',px,ly,pw,lh,lc);
+  for(let r=0;r<tl.length;r++){const j=tl.length-1-r,i=t[j],ms=L[i],y=ly+r*rh-loff,cy=y+rh/2;if(y+rh<ly||y>H)continue;
+    const isB=i===bestOf[kOf(i)],g=(ms-tb)/1000;
+    num(String(j+1),px+24,cy,13,C.faint,'right',700);num(fmt(ms),px+32,cy,17,isB?C.gainTxt:C.fg,'left',700);
+    const bx=px+32+numMetrics('00.000',17,700).tot+12,bwid=Math.max(20,pw-(bx-px)-74);
+    rr(bx,cy-3,bwid,6,3,C.btn);rr(bx,cy-3,Math.max(6,bwid*(0.08+0.92*Math.min(1,g/spread))),6,3,isB?C.gain:C.faint);
+    if(isB)txt('migliore',px+pw-12,cy,10,C.gainTxt,'right',500,'m');
+    else num(gap(g),px+pw-12,cy,14,C.dim,'right',700);
+    if(live&&i===n-1)txt('ultimo',bx,cy-9,9,C.faint,'left',500,'m')}
+  endList(key+'L',px,ly,pw,lh,lc)}
 // oggi = giri già salvati oggi su altre piste + quelli della pista attuale
 function todayData(){const d0=(saved.days||[])[0],old=d0&&!d0.closed&&dayKey(d0.date)===dayKey(Date.now())?dayFix(d0):null,nm=trackName()||'Pista';
   return{L:(old?old.laps:[]).concat(lt.laps),E:(old?old.ends:[]).concat(lt.laps.map((_,i)=>lt.ends[i]||null)),K:(old?old.trk:[]).concat(lt.laps.map(()=>nm))}}
 function drawLaps(){statusBar('','');const td=todayData(),L=td.L,n=L.length,T=turnsOf(L,td.E,td.K);
-  header(n?(n===1?'1 giro':`${n} giri`):'Oggi',()=>dev.screen='ready','');
-  if(n>1&&T.length>1){cx.font=FL(20,700);const tw=cx.measureText(`${n} giri`).width;txt(`in ${T.length} turni`,58+tw,SB+21,13,C.dim,'left',500)}
+  header('Oggi',()=>dev.screen='ready','');
+  if(n){cx.font=FL(20,700);const tw=cx.measureText('Oggi').width;txt(`${n===1?'1 giro':n+' giri'}${T.length>1?' in '+T.length+' turni':''}`,58+tw,SB+22,11,C.dim,'left',500,'m')}
   const nd=(saved.days||[]).length;
   button('days',W-200,SB+5,112,30,nd?`Giornate ${nd}`:'Giornate',{ghost:true,size:14,act:openDays});
   button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(L,td.E,td.K,Date.now())});
@@ -827,7 +840,7 @@ function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready'
       button('inst',x0,cy,w0,ch,'Installa',{primary:true,size:14,act:()=>{const e=instEvt;instEvt=null;e.prompt();e.userChoice.then(r=>toast(r.outcome==='accepted'?'Installata':'Installazione annullata'),()=>{})}})}}}
 
 // ---------- disegno complessivo ----------
-function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
+function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.background=C.bg;cx.setTransform(scale,0,0,scale,0,0);hits=[];scrollZone=null;zones=[];cx.fillStyle=C.bg;cx.fillRect(0,0,W,H);
   const s=dev.screen;
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
   else if(s==='wizard')drawWizard();else if(s==='trackmap')drawTrackMap();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();else if(s==='days')drawDays();else if(s==='day')drawDay();
@@ -861,7 +874,7 @@ function secDragMove(p){const g=dev.mapGeo,sd=dev.secDrag;if(!g||!sd)return;let 
   F[sd.k]=Math.max(lo,Math.min(hi,g.cum[bj]/L));g.tk.sec={n:secCount(g.tk),f:F};sd.moved=true}
 cv.addEventListener('pointerdown',e=>{keepAwake();const p=pt(e),h=hitAt(p);pressed=h?h.id:null;try{cv.setPointerCapture(e.pointerId)}catch(x){}
   if(secDragStart(p))return;
-  const z=scrollZone;drag=null;if(z&&z.max>0&&p.x>=z.x&&p.x<=z.x+z.w&&p.y>=z.y&&p.y<=z.y+z.h){dev[z.key+'V']=0;drag={key:z.key,max:z.max,y0:p.y,s0:dev[z.key]||0,on:false,ly:p.y,lt:performance.now(),v:0}}});
+  const z=zones.find(q=>p.x>=q.x&&p.x<=q.x+q.w&&p.y>=q.y&&p.y<=q.y+q.h)||null;drag=null;if(z&&z.max>0&&p.x>=z.x&&p.x<=z.x+z.w&&p.y>=z.y&&p.y<=z.y+z.h){dev[z.key+'V']=0;drag={key:z.key,max:z.max,y0:p.y,s0:dev[z.key]||0,on:false,ly:p.y,lt:performance.now(),v:0}}});
 cv.addEventListener('pointermove',e=>{if(dev.secDrag){secDragMove(pt(e));return}if(!drag)return;const p=pt(e),dy=p.y-drag.y0;if(!drag.on&&Math.abs(dy)>6){drag.on=true;pressed=null}
   if(drag.on){const t=performance.now(),dt=Math.max(1,t-drag.lt);drag.v=0.6*drag.v+0.4*(-(p.y-drag.ly)/dt*16.7);drag.ly=p.y;drag.lt=t;
     dev[drag.key]=Math.max(0,Math.min(drag.max,drag.s0-dy))}});
