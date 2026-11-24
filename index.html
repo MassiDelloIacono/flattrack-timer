@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v51';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v52';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -89,13 +89,22 @@ const lt=new LapTimer();lt.minLapMs=saved.minLap*1000;
 // ---------- turni e giornate ----------
 // un turno nuovo quando fra la fine di un giro e l'inizio del successivo passano più di 2 minuti (sosta ai box)
 const TURN_GAP=120000;
-function turnsOf(L,E){const out=[];for(let i=0;i<L.length;i++){const st=E&&E[i]?E[i]-L[i]:null,prev=E&&i?E[i-1]:null;
-  if(!out.length||(st!=null&&prev!=null&&st-prev>TURN_GAP))out.push([]);out[out.length-1].push(i)}return out}
+function turnsOf(L,E,K){const out=[];for(let i=0;i<L.length;i++){const st=E&&E[i]?E[i]-L[i]:null,prev=E&&i?E[i-1]:null;
+  if(!out.length||(st!=null&&prev!=null&&st-prev>TURN_GAP)||(K&&i&&K[i]!==K[i-1]))out.push([]);out[out.length-1].push(i)}return out}
 const dayKey=d=>{const x=new Date(d);return x.getFullYear()+'-'+(x.getMonth()+1)+'-'+x.getDate()};
 // la giornata finita va nell'archivio: si salva da sola, nessun pulsante da ricordare
 function archiveSession(){const S=saved.session;if(!S||!S.laps||!S.laps.length)return false;
-  (saved.days||(saved.days=[])).unshift({date:S.date,track:S.trackName||((saved.tracks[S.track]||{}).name)||'Pista',laps:S.laps.slice(),ends:(S.ends||[]).slice()});
+  const nm=S.trackName||((saved.tracks[S.track]||{}).name)||'Pista',D=saved.days||(saved.days=[]),d0=D[0];
+  const part={laps:S.laps.slice(),ends:S.laps.map((_,i)=>(S.ends||[])[i]||null),trk:S.laps.map(()=>nm)};
+  // stessa data: i giri si aggiungono alla giornata già salvata (es. ovale al mattino, TT al pomeriggio)
+  if(d0&&!d0.closed&&dayKey(d0.date)===dayKey(S.date)){dayFix(d0);d0.laps=d0.laps.concat(part.laps);d0.ends=d0.ends.concat(part.ends);d0.trk=d0.trk.concat(part.trk);d0.date=S.date}
+  else D.unshift({date:S.date,track:nm,laps:part.laps,ends:part.ends,trk:part.trk});
   if(saved.days.length>300)saved.days.length=300;saved.session=null;persist();return true}
+function dayFix(d){if(!d.ends)d.ends=[];while(d.ends.length<d.laps.length)d.ends.push(null);if(!d.trk||d.trk.length!==d.laps.length)d.trk=d.laps.map((_,i)=>(d.trk||[])[i]||d.track||'Pista');return d}
+const dayTracks=d=>{const o=[];dayFix(d).trk.forEach(t=>{if(o.indexOf(t)<0)o.push(t)});return o};
+// giornate salvate separate nello stesso giorno (versioni vecchie): le unisco
+(function(){const D=saved.days;if(!D||D.length<2)return;let ch=false;for(let i=0;i<D.length-1;){if(dayKey(D[i].date)===dayKey(D[i+1].date)){const a=dayFix(D[i+1]),b=dayFix(D[i]);
+  D[i]={date:b.date,track:a.track,laps:a.laps.concat(b.laps),ends:a.ends.concat(b.ends),trk:a.trk.concat(b.trk)};D.splice(i+1,1);ch=true}else i++}if(ch)persist()})();
 if(saved.session&&saved.session.laps&&saved.session.laps.length&&dayKey(saved.session.date)!==dayKey(Date.now()))archiveSession();
 if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.session.laps;lt.laps=L.slice();lt.lastMs=L[L.length-1];
   lt.ends=L.map((_,i)=>(saved.session.ends||[])[i]||null);
@@ -103,7 +112,8 @@ if(saved.session&&saved.session.laps&&saved.session.laps.length){const L=saved.s
   L.forEach((ms,i)=>{if(!lt.bestMs||ms<lt.bestMs){lt.bestMs=ms;lt.bestNo=i+1}})}
 // salvo anche la traccia del giro migliore: senza, dopo un riavvio dell'app delta e settori restavano spenti
 const saveSession=()=>{saved.session={laps:lt.laps,ends:lt.ends,best:lt.best.map(q=>[Math.round(q[0]*100)/100,Math.round(q[1])]),track:dev.track,trackName:trackName(),date:new Date().toISOString()};persist()};
-function closeDay(){saveSession();const ok=archiveSession();lt.resetSession();saveSession();return ok}
+function closeDay(){saveSession();const ok=archiveSession();const d0=(saved.days||[])[0];if(d0&&dayKey(d0.date)===dayKey(Date.now()))d0.closed=true;lt.resetSession();saveSession();return ok}
+function switchTrackKeepDay(){saveSession();archiveSession();lt.resetSession();saveSession()}
 // giro minimo: in automatico metà del record di quella pista (ovale e TT hanno valori diversi da soli)
 function effMinLap(){const tk=saved.tracks[dev.track];if(saved.minLapAuto!==false&&tk&&tk.record)return Math.max(4,Math.round(tk.record*0.5/1000));return saved.minLap}
 function applyMinLap(){lt.minLapMs=effMinLap()*1000}
@@ -573,37 +583,43 @@ function endList(key,x,y,w,h,content){cx.restore();const max=Math.max(0,content-
 
 // ---------- giri, divisi per turno ----------
 function lapLabel(i,L,E){const T=turnsOf(L,E);if(T.length<2)return`giro ${i+1}`;for(let k=0;k<T.length;k++){const j=T[k].indexOf(i);if(j>=0)return`turno ${k+1}, giro ${j+1}`}return''}
-function lapList(L,E,key,live){const n=L.length,T=turnsOf(L,E),top=SB+41,ah=H-top,hh=34,rh=28;let bi=0;L.forEach((ms,i)=>{if(ms<L[bi])bi=i});
-  // dal turno più recente; dentro ogni turno dall'ultimo giro
+function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=SB+41,ah=H-top,hh=34,rh=28,multi=K&&K.some(k=>k!==K[0]);
+  // migliore di ogni pista: ovale e TT non si confrontano tra loro
+  const bestOf={};L.forEach((ms,i)=>{const k=K?K[i]:'';if(bestOf[k]==null||ms<L[bestOf[k]])bestOf[k]=i});
   const rows=[];for(let k=T.length-1;k>=0;k--){rows.push({h:k});for(let j=T[k].length-1;j>=0;j--)rows.push({i:T[k][j],j})}
   const content=rows.reduce((a,r)=>a+(r.h!=null?hh:rh),0),off=listArea(key,0,top,W,ah,content);let y=top-off;
   for(const r of rows){const h=r.h!=null?hh:rh;if(y+h>=top&&y<=H){const cy=y+h/2;
-    if(r.h!=null){const t=T[r.h],tl=t.map(i=>L[i]),tb=Math.min(...tl),avg=tl.reduce((a,b)=>a+b,0)/tl.length;
-      cx.fillStyle=C.surface;cx.fillRect(0,y,W,h);txt(T.length>1?`Turno ${r.h+1}`:'Turno unico',14,cy,15,C.fg,'left',700);
-      const st=E&&E[t[0]]?new Date(E[t[0]]-L[t[0]]):null;cx.font=FL(15,700);const lw=cx.measureText(T.length>1?`Turno ${r.h+1}`:'Turno unico').width;
-      if(st)txt(st.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),24+lw,cy+1,12,C.faint,'left',500);
-      num(fmt(tb),W-14,cy,16,C.fg,'right',700);cx.font=FN(16,700);const bw=numMetrics(fmt(tb),16,700).tot;
-      txt('migliore',W-22-bw,cy+1,12,C.dim,'right',500);
+    if(r.h!=null){const t=T[r.h],tl=t.map(i=>L[i]),tb=Math.min(...tl),avg=tl.reduce((a,b)=>a+b,0)/tl.length,ttl=T.length>1?`Turno ${r.h+1}`:'Turno unico';
+      cx.fillStyle=C.surface;cx.fillRect(0,y,W,h);txt(ttl,14,cy,15,C.fg,'left',700);
+      const st=E&&E[t[0]]?new Date(E[t[0]]-L[t[0]]):null;cx.font=FL(15,700);let lx=24+cx.measureText(ttl).width;
+      if(st){const ts=st.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});txt(ts,lx,cy+1,12,C.faint,'left',500);cx.font=FL(12,500);lx+=cx.measureText(ts).width+10}
+      num(fmt(tb),W-14,cy,16,C.fg,'right',700);const bw=numMetrics(fmt(tb),16,700).tot;
+      txt('migliore',W-22-bw,cy+1,12,C.dim,'right',500);cx.font=FL(12,500);
       const mx=W-30-bw-cx.measureText('migliore').width-16;num(fmt(avg),mx,cy,16,C.fg,'right',700);const aw=numMetrics(fmt(avg),16,700).tot;
-      txt('media',mx-8-aw,cy+1,12,C.dim,'right',500);txt(tl.length===1?'1 giro':`${tl.length} giri`,W/2-60,cy+1,13,C.dim,'right',600)}
-    else{const i=r.i,ms=L[i],isB=i===bi;
+      txt('media',mx-8-aw,cy+1,12,C.dim,'right',500);cx.font=FL(12,500);const gx=mx-16-aw-cx.measureText('media').width;
+      txt(tl.length===1?'1 giro':`${tl.length} giri`,gx,cy+1,13,C.dim,'right',600);cx.font=FL(13,600);
+      if(multi)fitT(K[t[0]],lx,cy+1,12,C.accentTxt,gx-cx.measureText(`${tl.length} giri`).width-12-lx,'left',600)}
+    else{const i=r.i,ms=L[i],bi=bestOf[K?K[i]:''],isB=i===bi;
       if(isB){cx.fillStyle=C.gainWash;cx.fillRect(0,y,W,h)}
       num(String(r.j+1),36,cy,15,C.dim,'right',600);num(fmt(ms),48,cy,21,isB?C.gainTxt:C.fg,'left',700);
       if(live&&i===n-1&&!isB){const tw=numMetrics(fmt(ms),21,700).tot;txt('ultimo',58+tw,cy+1,12,C.faint,'left',500)}
-      if(isB)txt('Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-L[bi])/1000),W-14,cy,17,C.lossTxt,'right',600);
+      if(isB)txt(multi?'Migliore di '+K[i]:'Migliore',W-14,cy,13,C.gainTxt,'right',700);else num(gap((ms-L[bi])/1000),W-14,cy,17,C.lossTxt,'right',600);
       hline(12,y+h-1,W-24,C.line)}}
     y+=h}
   endList(key,0,top,W,ah,content)}
-function drawLaps(){statusBar('','');const L=lt.laps,n=L.length,T=turnsOf(L,lt.ends);
+// oggi = giri già salvati oggi su altre piste + quelli della pista attuale
+function todayData(){const d0=(saved.days||[])[0],old=d0&&!d0.closed&&dayKey(d0.date)===dayKey(Date.now())?dayFix(d0):null,nm=trackName()||'Pista';
+  return{L:(old?old.laps:[]).concat(lt.laps),E:(old?old.ends:[]).concat(lt.laps.map((_,i)=>lt.ends[i]||null)),K:(old?old.trk:[]).concat(lt.laps.map(()=>nm))}}
+function drawLaps(){statusBar('','');const td=todayData(),L=td.L,n=L.length,T=turnsOf(L,td.E,td.K);
   header(n?(n===1?'1 giro':`${n} giri`):'Oggi',()=>dev.screen='ready','');
   if(n>1&&T.length>1){cx.font=FL(20,700);const tw=cx.measureText(`${n} giri`).width;txt(`in ${T.length} turni`,58+tw,SB+21,13,C.dim,'left',500)}
   const nd=(saved.days||[]).length;
   button('days',W-200,SB+5,112,30,nd?`Giornate ${nd}`:'Giornate',{ghost:true,size:14,act:openDays});
-  button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(L,lt.ends,trackName(),Date.now())});
-  button('reset',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>{if(n)dev.screen='confirmReset';else toast('Niente da azzerare')}});
+  button('share',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(L,td.E,td.K,Date.now())});
+  button('reset',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>{if(lt.laps.length)dev.screen='confirmReset';else toast('Niente da azzerare')}});
   if(!n){const top=SB+41;icon('laps',W/2,top+48,24,C.faint);txt('Ancora nessun giro oggi',W/2,top+78,16,C.dim,'center',600);
     txt('I turni si separano da soli quando ti fermi più di 2 minuti',W/2,top+100,13,C.faint,'center',500);scrollZone=null;return}
-  lapList(L,lt.ends,'scroll',true)}
+  lapList(L,td.E,'scroll',true,td.K)}
 // ---------- archivio delle giornate ----------
 const dayName=d=>new Date(d).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
 function openDays(){dev.screen='days';dev.dyscroll=0;dev.dyscrollV=0}
@@ -612,18 +628,18 @@ function drawDays(){statusBar('','');const D=saved.days||[],n=D.length;header('G
   if(!n){scrollZone=null;icon('laps',W/2,top+44,24,C.faint);txt('Nessuna giornata salvata',W/2,top+74,16,C.fg,'center',600);
     txt('A fine giornata i giri finiscono qui da soli, divisi per turno',W/2,top+96,13,C.dim,'center',500);return}
   const off=listArea('dyscroll',0,top,W,ah,n*rh);
-  for(let i=0;i<n;i++){const d=D[i],y=top+i*rh-off;if(y+rh<top||y>H)continue;const cy=y+rh/2,b=Math.min(...d.laps),T=turnsOf(d.laps,d.ends).length;
+  for(let i=0;i<n;i++){const d=dayFix(D[i]),y=top+i*rh-off;if(y+rh<top||y>H)continue;const cy=y+rh/2,b=Math.min(...d.laps),T=turnsOf(d.laps,d.ends,d.trk).length,tks=dayTracks(d);
     const nm=dayName(d.date);txt(nm.charAt(0).toUpperCase()+nm.slice(1),14,cy-8,16,C.fg,'left',600);
-    txt(`${d.track}, ${T===1?'1 turno':T+' turni'}, ${d.laps.length===1?'1 giro':d.laps.length+' giri'}`,14,cy+10,12,C.dim,'left',500);
-    num(fmt(b),W-14,cy,20,C.gainTxt,'right',700);hline(12,y+rh-1,W-24,C.line);
+    fitT(`${tks.join(', ')}: ${T===1?'1 turno':T+' turni'}, ${d.laps.length===1?'1 giro':d.laps.length+' giri'}`,14,cy+10,12,C.dim,W-140,'left',500);
+    if(tks.length===1)num(fmt(b),W-14,cy,20,C.gainTxt,'right',700);else txt(tks.length+' piste',W-14,cy,14,C.dim,'right',600);hline(12,y+rh-1,W-24,C.line);
     const vy=Math.max(y,top),vh=Math.min(y+rh,H)-vy;if(vh>4)hits.push({id:'day'+i,x:0,y:vy,w:W,h:vh,act:()=>{dev.dayIdx=i;dev.screen='day';dev.dscroll=0;dev.dscrollV=0}})}
   endList('dyscroll',0,top,W,ah,n*rh)}
 function drawDay(){statusBar('','');const d=(saved.days||[])[dev.dayIdx];if(!d){dev.screen='days';return}
   const nm=new Date(d.date).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});header(nm,()=>dev.screen='days','');
-  cx.font=FL(20,700);txt(d.track,58+cx.measureText(nm).width,SB+21,13,C.dim,'left',500);
-  button('dshare',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(d.laps,d.ends,d.track,d.date)});
+  cx.font=FL(20,700);fitT(dayTracks(d).join(', '),58+cx.measureText(nm).width,SB+21,13,C.dim,W-150-cx.measureText(nm).width,'left',500);
+  button('dshare',W-84,SB+5,36,30,'',{ghost:true,icon:'share',act:()=>shareLaps(d.laps,d.ends,dayFix(d).trk,d.date)});
   button('ddel',W-44,SB+5,36,30,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDayDel'});
-  lapList(d.laps,d.ends,'dscroll',false)}
+  lapList(d.laps,d.ends,'dscroll',false,dayFix(d).trk)}
 // ---------- procedura traguardo ----------
 function startWizard(fresh){if(!dev.fix){toast('Aspetta il segnale GPS');return}dev.wizFresh=fresh===true;dev.wizPrev=dev.track;lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
 function drawWizard(){statusBar('','');
@@ -747,9 +763,10 @@ function drawConfirm(title,sub,yesLbl,act,back='ready'){statusBar('','');
   button('no',W/2-bw-6,H-60,bw,40,'Annulla',{ghost:true,act:()=>dev.screen=back,size:16});
   button('yes',W/2+6,H-60,bw,40,yesLbl,{danger:true,act,size:16})}
 
-function shareLaps(L,E,track,date){if(!L.length){toast('Nessun giro da condividere');return}
-  let bi=0;L.forEach((ms,i)=>{if(ms<L[bi])bi=i});const T=turnsOf(L,E),out=[`ApexLap, ${dayName(date)}`,track||'Pista',`Miglior giro: ${fmt(L[bi])} (${lapLabel(bi,L,E)})`];
-  T.forEach((t,k)=>{const tl=t.map(i=>L[i]);out.push('',T.length>1?`Turno ${k+1}: ${tl.length} giri, migliore ${fmt(Math.min(...tl))}`:`${tl.length} giri`);tl.forEach((ms,j)=>out.push(`${j+1}\t${fmt(ms)}`))});
+function shareLaps(L,E,K,date){if(!L.length){toast('Nessun giro da condividere');return}
+  const T=turnsOf(L,E,K),tks=[];K.forEach(k=>{if(tks.indexOf(k)<0)tks.push(k)});const out=[`ApexLap, ${dayName(date)}`];
+  tks.forEach(tn=>{let bi=-1;L.forEach((ms,i)=>{if(K[i]===tn&&(bi<0||ms<L[bi]))bi=i});out.push(`${tn}: miglior giro ${fmt(L[bi])}`)});
+  T.forEach((t,k)=>{const tl=t.map(i=>L[i]);out.push('',`Turno ${k+1}${tks.length>1?' ('+K[t[0]]+')':''}: ${tl.length} giri, migliore ${fmt(Math.min(...tl))}`);tl.forEach((ms,j)=>out.push(`${j+1}\t${fmt(ms)}`))});
   const lines=out.join('\n');
   if(navigator.share)navigator.share({title:'Giri',text:lines}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(lines).then(()=>toast('Giri copiati'),()=>toast('Impossibile condividere'))}
@@ -815,8 +832,8 @@ function render(){Object.assign(C,isDay()?DAY:NIGHT);document.body.style.backgro
   if(s==='boot')drawBoot();else if(s==='ready')drawReady();else if(s==='race')drawRace();else if(s==='laps')drawLaps();
   else if(s==='wizard')drawWizard();else if(s==='trackmap')drawTrackMap();else if(s==='settings')drawSettings();else if(s==='tracks')drawTracks();else if(s==='days')drawDays();else if(s==='day')drawDay();
   else if(s==='confirmDayDel'){const d=(saved.days||[])[dev.dayIdx];drawConfirm('Cancellare questa giornata?',d?`${dayName(d.date)}: ${d.laps.length} giri cancellati per sempre`:'','Cancella',()=>{saved.days.splice(dev.dayIdx,1);persist();dev.screen='days';toast('Giornata cancellata')},'day')}
-  else if(s==='confirmReset')drawConfirm('Chiudere la giornata?',`I ${lt.laps.length} giri vanno in Giornate, divisi per turno, e oggi riparte da zero`,'Chiudi giornata',()=>{closeDay();dev.screen='ready';toast('Giornata salvata in Giornate')},'laps');
-  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri fatti qui vanno in Giornate`,'Cambia pista',()=>{closeDay();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
+  else if(s==='confirmReset')drawConfirm('Chiudere la giornata?',`I ${todayData().L.length} giri vanno in Giornate, divisi per turno, e oggi riparte da zero`,'Chiudi giornata',()=>{closeDay();dev.screen='ready';toast('Giornata salvata in Giornate')},'laps');
+  else if(s==='confirmSwitch')drawConfirm('Cambiare pista?',`I ${lt.laps.length} giri fatti qui restano nella giornata di oggi`,'Cambia pista',()=>{switchTrackKeepDay();useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')},'tracks');
   else if(s==='confirmDel'){const t=saved.tracks[dev.tsel];drawConfirm(`Cancellare ${t?t.name:'la pista'}?`,t&&t.record?`Si perde anche il record (${fmt(t.record)})`:'Il traguardo salvato viene eliminato','Cancella',()=>{const i=dev.tsel;saved.tracks.splice(i,1);persist();
     if(i===dev.track){lt.clearLine();dev.track=-1}else if(i<dev.track)dev.track--;dev.tsel=Math.min(i,saved.tracks.length-1);dev.screen='tracks';toast('Pista cancellata')},'tracks')}
   if(dev.toast&&now()<dev.toastUntil){cx.font=FL(15,700);const w=cx.measureText(dev.toast).width+32;rr((W-w)/2,SB+8,w,28,8,C.btn);txt(dev.toast,W/2,SB+22.5,15,C.fg,'center',600)}}
