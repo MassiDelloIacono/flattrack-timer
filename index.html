@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v53';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v54';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -787,7 +787,7 @@ function shareLaps(L,E,K,date){if(!L.length){toast('Nessun giro da condividere')
 // ---------- opzioni ----------
 // Opzioni: a sinistra le sezioni, a destra le scelte di quella sezione; tutto in una schermata, niente scorrimento
 const SET_TABS=[['gps','GPS'],['gara','In gara'],['giri','Giri'],['tempi','Tempi'],['schermo','Schermo']];
-function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',VERSION);scrollZone=null;
+function drawSettings(){statusBar('','');header('Opzioni',()=>dev.screen='ready',`${VERSION}  ${Math.max(innerWidth,innerHeight)}×${Math.min(innerWidth,innerHeight)}`);scrollZone=null;
   const top=SB+41,sw=Math.min(150,W*0.28),tab=dev.setTab||'gps',th=Math.min(36,(H-top-8)/SET_TABS.length);
   // sezioni
   SET_TABS.forEach(([id,l],k)=>{const y=top+4+k*th,sel=id===tab;
