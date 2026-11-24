@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v58';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v59';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -641,24 +641,36 @@ function drawDay(){const d=(saved.days||[])[dev.dayIdx];if(!d){dev.screen='days'
 // ---------- procedura traguardo ----------
 function startWizard(fresh){if(!dev.fix){toast('Aspetta il segnale GPS');return}dev.wizFresh=fresh===true;dev.wizPrev=dev.track;lt.clearLine();dev.track=-1;dev.screen='wizard';dev.wiz=1}
 function drawWizard(){statusBar('','',true);
-  header('Imposta traguardo',()=>{dev.screen='ready';dev.wiz=0},'',50);
-  if(dev.wiz<3)txt(`passo ${dev.wiz} di 2`,W-16,72,16,C.dim,'right',500,'m');
-  const pair=(a,b)=>{cx.font=FL(24,700);const w1=cx.measureText(a.label).width+68,w2=cx.measureText(b.label).width+88,x0=W/2-(w1+w2+14)/2,y=H-72;
-    button(a.id,x0,y,w1,58,a.label,{ghost:true,act:a.act,size:24,r:16,weight:600});button(b.id,x0+w1+14,y,w2,58,b.label,{primary:true,act:b.act,size:24,r:16,disabled:b.dis})};
-  if(dev.wiz===1){const moving=dev.speed>5,prec=dev.hAcc,ok=dev.fix&&prec<6;
-    txt('Fermati sulla linea del traguardo',W/2,129,32,C.fg,'center',700);
-    if(moving)txt('Sei in movimento: fermati',W/2,166,21,C.lossTxt,'center',700);
-    else if(dev.fix&&!ok)txt('Aspetta qualche secondo: sotto 6 m è preciso',W/2,166,21,C.accentTxt,'center',600);
-    else txt('Moto rivolta nel senso di marcia',W/2,166,21,C.dim,'center',500);
-    txt('precisione gps',W/2,201,18,ok?C.gainTxt:C.dim,'center',500,'m');
-    num(dev.fix?`±${Math.round(prec)} m`:'--',W/2,247,54,ok?C.gainTxt:C.fg,'center',700);
-    pair({id:'wcancel',label:'Annulla',act:()=>dev.screen='ready'},{id:'wok',label:'Sono sulla linea',dis:moving||!dev.fix,act:()=>{dev.pend={lat:dev.gps.lat,lon:dev.gps.lon};dev.wiz=2}})}
-  else if(dev.wiz===2){txt('Ora parti in avanti',W/2,140,40,C.fg,'center',700);
-    txt('Dopo 8 metri prendo la direzione di marcia da solo',W/2,182,21,C.dim,'center',500);
-    const a=(now()/700)%1;for(let i=0;i<3;i++){const x=80+((a+i/3)%1)*(W-160);icon('arrowR',x,250,44,C.faint)}
-    cx.font=FL(24,600);const w1=cx.measureText('Annulla').width+68;button('wcancel2',W/2-w1/2,H-72,w1,58,'Annulla',{ghost:true,act:()=>{dev.screen='ready';dev.wiz=0},size:24,r:16,weight:600})}
-  else{icon('check',W/2,150,64,C.gainTxt);txt(dev.wizNew?'Pista salvata':'Traguardo aggiornato',W/2,220,40,C.fg,'center',700);
-    txt(dev.wizNew?`${trackName()}: puoi rinominarla da Piste`:`${trackName()}: nome e record restano`,W/2,262,21,C.dim,'center',500)}}
+  const w=dev.wiz||1;header('Imposta traguardo',()=>{dev.screen='ready';dev.wiz=0},'',44);
+  if(w<3)for(let i=0;i<2;i++)rr(W-16-56-(1-i)*62,60,56,8,4,i<w?C.accent:C.off);
+  // a sinistra il disegno: moto vista dall'alto sulla linea a scacchi, freccia del senso di marcia
+  const top=98,bot=H-14,cw=300;rr(16,top,cw,bot-top,22,C.surface);
+  const ox=16+20,oy=top+(bot-top-220)/2;
+  if(w<3){cx.fillStyle=C.btn;cx.fillRect(ox+70,oy,120,220);cx.fillStyle=C.fg;cx.fillRect(ox+70,oy+104,120,12);
+    cx.fillStyle=C.bg;for(let k=0;k<5;k++)cx.fillRect(ox+70+k*24,oy+104,12,12);
+    const by=w===2?oy+96-((now()/18)%70):oy+96;rr(ox+122,by,16,44,8,C.accent);
+    cx.beginPath();cx.moveTo(ox+130,oy+60);cx.lineTo(ox+130,oy+30);cx.moveTo(ox+120,oy+42);cx.lineTo(ox+130,oy+28);cx.lineTo(ox+140,oy+42);
+    cx.strokeStyle=C.fg;cx.lineWidth=4;cx.lineCap='round';cx.lineJoin='round';cx.stroke()}
+  else icon('check',16+cw/2,top+(bot-top)/2,80,C.gainTxt);
+  const rx=16+cw+18,rw=W-16-rx,by=bot-56;
+  if(w===1){const moving=dev.speed>5,prec=dev.hAcc,ok=dev.fix&&prec<6,pc=!dev.fix?C.lossTxt:ok?C.gainTxt:C.warn;
+    txt('passo 1 di 2',rx,top+10,15,C.dim,'left',500,'m');
+    fitT('Fermati sulla linea',rx,top+42,32,C.fg,rw,'left',700);
+    fitT(moving?'Sei in movimento: fermati':'Ruota davanti sulla linea, moto nel senso di marcia',rx,top+78,20,moving?C.lossTxt:C.dim,rw,'left',moving?700:500);
+    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'aspetta qualche secondo',rx,by-44,15,pc,'left',500,'m');
+    num(dev.fix?`±${Math.round(prec)} m`:'--',rx+rw,by-46,40,pc,'right',700);
+    const fr=dev.fix?Math.max(0.05,Math.min(1,1-(prec-2)/20)):0;rr(rx,by-22,rw,6,3,C.off);if(fr)rr(rx,by-22,rw*fr,6,3,!dev.fix?C.loss:ok?C.gain:C.warn);
+    cx.font=FL(22,600);const aw=cx.measureText('Annulla').width+56;
+    button('wcancel',rx,by,aw,56,'Annulla',{ghost:true,act:()=>dev.screen='ready',size:22,r:16,weight:600});
+    button('wok',rx+aw+12,by,rw-aw-12,56,'Sono sulla linea',{primary:true,size:22,r:16,disabled:moving||!dev.fix,act:()=>{dev.pend={lat:dev.gps.lat,lon:dev.gps.lon};dev.wiz=2}})}
+  else if(w===2){txt('passo 2 di 2',rx,top+10,15,C.dim,'left',500,'m');
+    fitT('Ora parti in avanti',rx,top+42,32,C.fg,rw,'left',700);
+    fitT('Dopo 8 metri prendo la direzione di marcia da solo',rx,top+78,20,C.dim,rw,'left',500);
+    cx.font=FL(22,600);const aw=cx.measureText('Annulla').width+56;
+    button('wcancel2',rx,by,aw,56,'Annulla',{ghost:true,act:()=>{dev.screen='ready';dev.wiz=0},size:22,r:16,weight:600})}
+  else{fitT(dev.wizNew?'Pista salvata':'Traguardo aggiornato',rx,top+42,32,C.fg,rw,'left',700);
+    fitT(dev.wizNew?`${trackName()}: puoi rinominarla da Piste`:`${trackName()}: nome e record restano`,rx,top+78,20,C.dim,rw,'left',500)}}
+
 // ---------- piste ----------
 function openTracks(){dev.screen='tracks';dev.tsel=dev.track>=0?dev.track:(saved.tracks.length?0:-1);dev.tscroll=Math.max(0,(dev.tsel-2)*30);dev.tscrollV=0}
 function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i].name;r.style.display='flex';setTimeout(()=>{inp.focus();inp.select()},50);
