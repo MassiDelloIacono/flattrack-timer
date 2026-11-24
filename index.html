@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v57';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v58';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -167,9 +167,9 @@ function onGeo(lat,lon,acc,spdMs,hdg,t){
 function onFix(f){
   dev.gps=f;
   if(f.valid&&!lt.line&&dev.screen!=='wizard'){
-    let bi=-1,bd=1500;saved.tracks.forEach((tk,i)=>{const d=hav(tk.lat,tk.lon,f.lat,f.lon);if(d<bd){bd=d;bi=i}});
-    // varianti nello stesso posto: vince l'ultima usata
-    const lu=saved.tracks[saved.lastTrack];if(bi>=0&&lu&&hav(lu.lat,lu.lon,f.lat,f.lon)<1500)bi=saved.lastTrack;
+    // una sola pista salvata qui: la scelgo da solo; con più varianti (ovale, TT) scegli tu dalla schermata principale
+    const nb=saved.tracks.map((tk,i)=>hav(tk.lat,tk.lon,f.lat,f.lon)<1500?i:-1).filter(i=>i>=0);let bi=nb.length===1?nb[0]:-1;
+    if(nb.length)dev.autoDone=true;
     if(bi>=0){useTrack(bi);toast(saved.tracks[bi].name+' riconosciuta')}}
   const dPend=dev.pend?hav(f.lat,f.lon,dev.pend.lat,dev.pend.lon):0;
   if(dev.screen==='wizard'&&dev.wiz===2&&f.valid&&dPend>=8&&f.speedKmh>8){
@@ -470,11 +470,30 @@ function drawChart(x,y,w,h){const L=lt.laps.slice(-12),n=L.length;if(!n)return;
 
 // ---------- riepilogo da fermo ----------
 function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,tk=saved.tracks[dev.track];
-  if(!lt.line){const y0=98;icon('flag',W/2,y0+20,36,C.dim);txt('Nessun traguardo',W/2,y0+70,34,C.fg,'center',700);
-    fitT('Fermati sulla linea e impostalo, oppure scegli una pista salvata',W/2,y0+112,20,C.dim,W-40,'center',500);
-    const hasT=saved.tracks.length;cx.font=FL(24,700);const w1=cx.measureText('Imposta traguardo').width+68,w2=hasT?cx.measureText('Scegli pista').width+68:0,tot=w1+(hasT?w2+12:0),x0=W/2-tot/2;
-    button('setline',x0,y0+138,w1,64,'Imposta traguardo',{primary:true,act:startWizard,size:24,r:16});
-    if(hasT)button('pick',x0+w1+12,y0+138,w2,64,'Scegli pista',{act:openTracks,size:24,r:16,weight:600})}
+  if(!lt.line){
+    // piste salvate vicine a sinistra, pista nuova (con la precisione GPS) a destra
+    const cw=300,cx0=W-16-cw,cy0=56,ch=290,lw=cx0-16-16;
+    const near=dev.gps&&dev.gps.lat?saved.tracks.map((t,i)=>({t,i,d:hav(dev.gps.lat,dev.gps.lon,t.lat,t.lon)})).filter(o=>o.d<1500).sort((a,b)=>a.d-b.d).slice(0,3):[];
+    const pick=i=>{if(lt.laps.length&&i!==dev.track){dev.tsel=i;dev.screen='confirmSwitch';return}useTrack(i);toast(saved.tracks[i].name+' selezionata')};
+    if(near.length){txt('piste salvate qui vicino',16,cy0+10,15,C.dim,'left',500,'m');
+      near.forEach((o,k)=>{const y=cy0+26+k*72,rx=16+lw;rr(16,y,lw,64,18,pressed==='near'+k?C.btnDown:C.surface);
+        cx.font=FL(20,700);const uw=cx.measureText('Usa').width+40;
+        fitT(o.t.name,34,y+21,22,C.fg,lw-uw-50,'left',700);
+        const ds=o.d<1000?`${Math.round(o.d)} m`:`${(o.d/1000).toFixed(1)} km`;
+        fitT(`a ${ds}${o.t.record?', record '+fmt(o.t.record):''}`,34,y+45,13,C.dim,lw-uw-50,'left',500,'m');
+        button('nearU'+k,rx-18-uw,y+10,uw,44,'Usa',{primary:k===0,act:()=>pick(o.i),r:14,size:20,weight:k===0?700:600});
+        hits.push({id:'near'+k,x:16,y,w:lw-uw-30,h:64,act:()=>pick(o.i)})})}
+    else{txt('Nessuna pista salvata qui vicino',16,cy0+40,22,C.fg,'left',600);
+      fitT('Imposta il traguardo: la pista si salva da sola',16,cy0+70,17,C.dim,lw,'left',500);
+      if(saved.tracks.length){cx.font=FL(20,600);const bw=cx.measureText('Tutte le piste').width+48;button('pick',16,cy0+96,bw,48,'Tutte le piste',{act:openTracks,r:14,size:20,weight:600})}}
+    rr(cx0,cy0,cw,ch,22,C.surface);
+    txt('Pista nuova',cx0+20,cy0+30,22,C.fg,'left',700);
+    txt('Fermati sulla linea,',cx0+20,cy0+60,17,C.dim,'left',500);txt('moto nel senso di marcia',cx0+20,cy0+82,17,C.dim,'left',500);
+    const ok=dev.fix&&dev.hAcc<6,pc=!dev.fix?C.lossTxt:ok?C.gainTxt:C.warn,py=cy0+ch-18-56-38;
+    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'aspetta qualche secondo',cx0+20,py,15,pc,'left',500,'m');
+    num(dev.fix?`±${Math.round(dev.hAcc)} m`:'--',cx0+cw-20,py-2,40,pc,'right',700);
+    const fr=dev.fix?Math.max(0.05,Math.min(1,1-(dev.hAcc-2)/20)):0;rr(cx0+20,py+22,cw-40,6,3,C.off);if(fr)rr(cx0+20,py+22,(cw-40)*fr,6,3,!dev.fix?C.loss:ok?C.gain:C.warn);
+    button('setline',cx0+20,cy0+ch-18-56,cw-40,56,'Imposta traguardo',{primary:true,act:startWizard,size:22,r:16})}
   else if(!n){const y=40;txt(lt.inLap?'giro in corso':'pronto',W/2,y+31,16,C.dim,'center',500,'m');
     txt(lt.inLap?'Riparti per continuare il giro':'Passa sul traguardo',W/2,y+72,40,C.fg,'center',700);
     txt(lt.inLap?'Il tempo riprende appena superi i 15 km/h':'Il cronometro parte da solo',W/2,y+117,22,C.dim,'center',500);
