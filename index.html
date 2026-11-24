@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v59';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v60';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -490,7 +490,7 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,tk=sav
     txt('Pista nuova',cx0+20,cy0+30,22,C.fg,'left',700);
     txt('Fermati sulla linea,',cx0+20,cy0+60,17,C.dim,'left',500);txt('moto nel senso di marcia',cx0+20,cy0+82,17,C.dim,'left',500);
     const ok=dev.fix&&dev.hAcc<6,pc=!dev.fix?C.lossTxt:ok?C.gainTxt:C.warn,py=cy0+ch-18-56-38;
-    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'aspetta qualche secondo',cx0+20,py,15,pc,'left',500,'m');
+    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'attendi',cx0+20,py,15,pc,'left',500,'m');
     num(dev.fix?`±${Math.round(dev.hAcc)} m`:'--',cx0+cw-20,py-2,40,pc,'right',700);
     const fr=dev.fix?Math.max(0.05,Math.min(1,1-(dev.hAcc-2)/20)):0;rr(cx0+20,py+22,cw-40,6,3,C.off);if(fr)rr(cx0+20,py+22,(cw-40)*fr,6,3,!dev.fix?C.loss:ok?C.gain:C.warn);
     button('setline',cx0+20,cy0+ch-18-56,cw-40,56,'Imposta traguardo',{primary:true,act:startWizard,size:22,r:16})}
@@ -657,7 +657,7 @@ function drawWizard(){statusBar('','',true);
     txt('passo 1 di 2',rx,top+10,15,C.dim,'left',500,'m');
     fitT('Fermati sulla linea',rx,top+42,32,C.fg,rw,'left',700);
     fitT(moving?'Sei in movimento: fermati':'Ruota davanti sulla linea, moto nel senso di marcia',rx,top+78,20,moving?C.lossTxt:C.dim,rw,'left',moving?700:500);
-    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'aspetta qualche secondo',rx,by-44,15,pc,'left',500,'m');
+    txt(!dev.fix?'nessun segnale':ok?'gps pronto':'attendi',rx,by-44,15,pc,'left',500,'m');
     num(dev.fix?`±${Math.round(prec)} m`:'--',rx+rw,by-46,40,pc,'right',700);
     const fr=dev.fix?Math.max(0.05,Math.min(1,1-(prec-2)/20)):0;rr(rx,by-22,rw,6,3,C.off);if(fr)rr(rx,by-22,rw*fr,6,3,!dev.fix?C.loss:ok?C.gain:C.warn);
     cx.font=FL(22,600);const aw=cx.measureText('Annulla').width+56;
