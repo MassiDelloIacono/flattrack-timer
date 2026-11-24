@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v62';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v63';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -695,7 +695,7 @@ function drawTracks(){const T=saved.tracks,n=T.length;
     g.ids.forEach((i,k)=>{const t=T[i],ry=y+42+k*rh,inUse=i===dev.track,sel=i===dev.tsel,cy=ry+rh/2,rx=x0+8,rw=cw-16;
       if(sel||inUse)rr(rx,ry+2,rw,rh-4,14,sel?C.btn:C.surface);
       if(inUse){cx.save();cx.beginPath();cx.roundRect(rx,ry+2,rw,rh-4,14);cx.clip();cx.fillStyle=C.accent;cx.fillRect(rx,ry+2,3,rh-4);cx.restore()}
-      let lx=rx+14;if(t.trace){drawTraceMini(t,lx,ry+8,56,rh-16,C.dim);lx+=66}
+      let lx=rx+18;
       let bx=x0+cw-16;const acts=[];
       if(sel){acts.push(['tdel','',{icon:'trash',ghost:true,act:()=>dev.screen='confirmDel'}],['tren','',{icon:'edit',ghost:true,act:()=>openRename(i)}]);if(t.trace)acts.push(['tmap','Mappa',{ghost:true,act:()=>dev.screen='trackmap',size:16,weight:600}])}
       if(!inUse)acts.unshift(['tuse'+i,'Usa',{primary:sel,bg:C.btn,size:16,act:()=>{dev.tsel=i;if(lt.laps.length&&i!==dev.track){dev.screen='confirmSwitch';return}useTrack(i);dev.screen='ready';toast(t.name+' selezionata')}}]);
