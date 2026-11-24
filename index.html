@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v61';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v62';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -674,31 +674,39 @@ function openRename(i){const r=$('ren'),inp=$('renIn');inp.value=saved.tracks[i]
   const close=()=>{r.style.display='none';inp.blur()};
   $('renOk').onclick=()=>{const v=inp.value.trim();if(v){saved.tracks[i].name=v.slice(0,24);persist();toast('Nome salvato')}close()};
   $('renNo').onclick=close;inp.onkeydown=e=>{if(e.key==='Enter')$('renOk').onclick()}}
+// piste raggruppate per impianto: le varianti (ovale, TT) stanno sotto lo stesso nome
+function trackGroups(){const T=saved.tracks,g=[];T.forEach((t,i)=>{let G=g.find(x=>x.ids.some(j=>hav(T[j].lat,T[j].lon,t.lat,t.lon)<300));if(!G){G={ids:[]};g.push(G)}G.ids.push(i)});
+  g.forEach(G=>{const ws=G.ids.map(i=>T[i].name.split(' '));let k=0;if(G.ids.length>1)while(ws.every(w=>w.length>k+1&&w[k]===ws[0][k]))k++;
+    G.name=k?ws[0].slice(0,k).join(' '):(G.ids.length>1?T[G.ids[0]].name:T[G.ids[0]].name);G.label=i=>{const w=T[i].name.split(' ');return k&&w.length>k?w.slice(k).join(' '):T[i].name};
+    G.d=dev.gps&&dev.gps.lat?Math.min(...G.ids.map(i=>hav(dev.gps.lat,dev.gps.lon,T[i].lat,T[i].lon))):null});
+  g.sort((a,b)=>(a.d==null?1e12:a.d)-(b.d==null?1e12:b.d));return g}
 function drawTracks(){const T=saved.tracks,n=T.length;
-  header('Piste',()=>dev.screen='ready',n?(n===1?'1 salvata':`${n} salvate`):'');
-  headBtns([{id:'tnew',icon:'plus',act:()=>startWizard(true)}]);
-  const top=58,rh=56,ah=H-84-top;
+  header('Piste',()=>dev.screen='ready','');
+  headBtns([{id:'tnew',label:'Nuova pista',act:()=>startWizard(true)}]);
+  const top=58,ah=H-top-6,x0=RL,cw=W-16-x0,rh=52;
   if(!n){scrollZone=null;icon('pin',W/2,150,36,C.faint);txt('Nessuna pista salvata',W/2,200,24,C.fg,'center',600);
-    txt('Tocca + o imposta un traguardo: la pista si salva da sola',W/2,234,18,C.dim,'center',500)}
-  const off=n?listArea('tscroll',0,top,W,ah,n*rh):0,acts=[];
-  for(let i=0;i<n;i++){const t=T[i],y=top+i*rh-off;if(y+rh<top||y>top+ah)continue;const sel=i===dev.tsel,act=i===dev.track,cy=y+rh/2;
-    if(sel)rr(12,y,W-24,rh,14,C.surface);else hline(12,y+rh-1,W-24,C.line);
-    if(act){cx.beginPath();cx.arc(28,cy,4,0,7);cx.fillStyle=C.accent;cx.fill()}
-    const colRec=sel?W-24-3*44-16:W-24;
-    num(t.record?fmt(t.record):'--',colRec,cy,24,t.record?(sel?C.gainTxt:C.fg):C.faint,'right',700);
-    const maxName=colRec-150-44;let nm=t.name;cx.font=FL(22,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
-    txt(nm,44,cy,22,sel?C.fg:C.dim,'left',sel?700:600);
-    const vy=Math.max(y,top),vh=Math.min(y+rh,top+ah)-vy;if(vh>4)hits.push({id:'trow'+i,x:0,y:vy,w:W,h:vh,act:()=>dev.tsel=i});
-    if(sel&&y>=top-2&&y+rh<=top+ah+2)acts.push(y)}
-  if(n)endList('tscroll',0,top,W,ah,n*rh);
-  acts.forEach(y=>{const bx=W-24-3*44;
-    button('tmap',bx,y+6,44,44,'',{ghost:true,icon:'map',act:()=>{dev.screen='trackmap'},r:12});
-    button('tren',bx+44,y+6,44,44,'',{ghost:true,icon:'edit',act:()=>openRename(dev.tsel),r:12});
-    button('tdel',bx+88,y+6,44,44,'',{ghost:true,icon:'trash',act:()=>dev.screen='confirmDel',r:12})});
-  const ok=dev.tsel>=0&&dev.tsel<n,inUse=ok&&dev.tsel===dev.track;
-  if(n){const lbl=inUse?'Pista in uso':ok?'Usa questa pista':'Scegli una pista';cx.font=FL(22,700);const bw=cx.measureText(lbl).width+80;
-    button('tuse',W-16-bw,H-70,bw,56,lbl,{primary:ok&&!inUse,disabled:!ok||inUse,size:22,r:16,
-    act:()=>{if(lt.laps.length&&dev.tsel!==dev.track){dev.screen='confirmSwitch';return}useTrack(dev.tsel);dev.screen='ready';toast(saved.tracks[dev.tsel].name+' selezionata')}})}}
+    txt('Tocca Nuova pista o imposta un traguardo: la pista si salva da sola',W/2,234,18,C.dim,'center',500);return}
+  const G=trackGroups(),hs=G.map(g=>12+30+(g.ids.length>1||true?g.ids.length*rh:0)+10),content=hs.reduce((a,b)=>a+b+10,0);
+  const off=listArea('tscroll',0,top,W,ah,content);let y=top+4-off;
+  G.forEach((g,gi)=>{const h=hs[gi];if(y+h>top&&y<H){rr(x0,y,cw,h,20,C.surface);
+    txt(g.name,x0+16,y+26,22,C.fg,'left',700);cx.font=FL(22,700);
+    const ds=g.d==null?'':g.d<1500?'qui':g.d<1000000?`${Math.round(g.d/1000)} km`:'';
+    const sub=[ds,g.ids.length>1?`${g.ids.length} varianti`:''].filter(Boolean).join(', ');if(sub)txt(sub,x0+28+cx.measureText(g.name).width,y+27,13,C.dim,'left',500,'m');
+    g.ids.forEach((i,k)=>{const t=T[i],ry=y+42+k*rh,inUse=i===dev.track,sel=i===dev.tsel,cy=ry+rh/2,rx=x0+8,rw=cw-16;
+      if(sel||inUse)rr(rx,ry+2,rw,rh-4,14,sel?C.btn:C.surface);
+      if(inUse){cx.save();cx.beginPath();cx.roundRect(rx,ry+2,rw,rh-4,14);cx.clip();cx.fillStyle=C.accent;cx.fillRect(rx,ry+2,3,rh-4);cx.restore()}
+      let lx=rx+14;if(t.trace){drawTraceMini(t,lx,ry+8,56,rh-16,C.dim);lx+=66}
+      let bx=x0+cw-16;const acts=[];
+      if(sel){acts.push(['tdel','',{icon:'trash',ghost:true,act:()=>dev.screen='confirmDel'}],['tren','',{icon:'edit',ghost:true,act:()=>openRename(i)}]);if(t.trace)acts.push(['tmap','Mappa',{ghost:true,act:()=>dev.screen='trackmap',size:16,weight:600}])}
+      if(!inUse)acts.unshift(['tuse'+i,'Usa',{primary:sel,bg:C.btn,size:16,act:()=>{dev.tsel=i;if(lt.laps.length&&i!==dev.track){dev.screen='confirmSwitch';return}useTrack(i);dev.screen='ready';toast(t.name+' selezionata')}}]);
+      acts.forEach(([id,l,o])=>{cx.font=FL(16,700);const w=l?cx.measureText(l).width+32:40;bx-=w;if(cy>top&&cy<H)button(id,bx,cy-20,w,40,l,Object.assign({r:12},o));bx-=6});
+      if(inUse){txt('in uso',bx-4,cy+1,12,C.accentTxt,'right',500,'m');cx.font=FM(12);bx-=cx.measureText('in uso').width+16}
+      num(t.record?fmt(t.record):'--',bx-6,cy,24,t.record?(inUse?C.gainTxt:C.fg):C.faint,'right',700);
+      const nw=bx-6-numMetrics(t.record?fmt(t.record):'--',24,700).tot-16-lx;
+      fitT(g.ids.length>1?g.label(i):'',lx,cy+1,20,inUse||sel?C.fg:C.dim,Math.max(20,nw),'left',inUse||sel?700:600);
+      const vy=Math.max(ry,top),vh=Math.min(ry+rh,H)-vy;if(vh>4)hits.unshift({id:'trow'+i,x:rx,y:vy,w:rw,h:vh,act:()=>dev.tsel=i})})}
+    y+=h+10});
+  endList('tscroll',0,top,W,ah,content)}
 // ---------- mappa della pista ----------
 const SPD_SLOW='#ff453a',SPD_MID='#ffc400';
 function spdCol(k){const fast=C.gain;return k<0.5?mix(SPD_SLOW,SPD_MID,k*2):mix(SPD_MID,fast,(k-0.5)*2)}
