@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v54';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v55';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -587,7 +587,7 @@ function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=SB+44,mul
   const kOf=i=>K?K[i]:'',bestOf={};L.forEach((ms,i)=>{const k=kOf(i);if(bestOf[k]==null||ms<L[bestOf[k]])bestOf[k]=i});
   // turno scelto: se non l'hai toccato segue l'ultimo
   let sel=dev[key+'Sel'];if(sel==null||sel>=T.length)sel=T.length-1;
-  const lw=Math.min(158,W*0.31),ch=multi?52:44,gp=4,ah=H-top-6;
+  const lw=Math.min(158,W*0.31),ch=48,gp=4,ah=H-top-6;
   // ---- turni (dal più recente) ----
   const tc=T.length*(ch+gp),toff=listArea(key+'T',6,top,lw,ah,tc);
   for(let r=0;r<T.length;r++){const k=T.length-1-r,t=T[k],y=top+r*(ch+gp)-toff;if(y+ch<top||y>H)continue;
@@ -597,18 +597,15 @@ function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=SB+44,mul
     txt(T.length>1?`Turno ${k+1}`:'Turno unico',16,y+12,13,C.fg,'left',700);cx.font=FL(13,700);
     if(st)txt(st,22+cx.measureText(T.length>1?`Turno ${k+1}`:'Turno unico').width,y+12,10,C.faint,'left',500,'m');
     txt(tl.length===1?'1 giro':`${tl.length} giri`,lw,y+12,10,C.dim,'right',500,'m');
-    if(multi)fitT(kOf(t[0]),16,y+ch-12,10,C.accentTxt,lw-90,'left',500,'m');
-    num(fmt(tb),lw,y+(multi?ch-13:ch-13),17,isTB?C.gainTxt:C.fg,'right',700);
-    // mini grafico del turno: più bassa la barra, più vicino al migliore
-    if(!multi&&tl.length>1){const bw=Math.min(6,(lw-104)/tl.length),gap0=L[bestOf[kOf(t[0])]];
-      tl.forEach((ms,j)=>{const hh=2+10*Math.min(1,(ms-gap0)/1000);rr(16+j*(bw+1.5),y+ch-7-hh,bw,hh,1,ms===gap0?C.gain:C.faint)})}
+    fitT(kOf(t[0])||trackName()||'',16,y+ch-13,10,C.accentTxt,lw-92,'left',500,'m');
+    num(fmt(tb),lw,y+ch-14,17,isTB?C.gainTxt:C.fg,'right',700);
     const vy=Math.max(y,top),vh=Math.min(y+ch,H)-vy;if(vh>6)hits.push({id:key+'t'+k,x:0,y:vy,w:lw+8,h:vh,act:()=>{dev[key+'Sel']=k;dev[key+'L']=0;dev[key+'LV']=0}})}
   endList(key+'T',6,top,lw,ah,tc);
   // ---- giri del turno scelto ----
   const px=lw+14,pw=W-px-6,t=T[sel],tl=t.map(i=>L[i]),tb=L[bestOf[kOf(t[0])]],avg=tl.reduce((a,b)=>a+b,0)/tl.length;
   rr(px,top,pw,ah,12,C.surface);
   txt(T.length>1?`Turno ${sel+1}`:'Turno unico',px+12,top+14,14,C.fg,'left',700);cx.font=FL(14,700);
-  if(multi)fitT(kOf(t[0]),px+20+cx.measureText(T.length>1?`Turno ${sel+1}`:'Turno unico').width,top+14,10,C.accentTxt,pw*0.35,'left',500,'m');
+  fitT(kOf(t[0])||trackName()||'',px+20+cx.measureText(T.length>1?`Turno ${sel+1}`:'Turno unico').width,top+14,10,C.accentTxt,pw*0.35,'left',500,'m');
   num(fmt(avg),px+pw-12,top+14,15,C.fg,'right',700);txt('media',px+pw-18-numMetrics(fmt(avg),15,700).tot,top+15,10,C.dim,'right',500,'m');
   const ly=top+28,lh=ah-30,rh=24,spread=Math.max(0.3,(Math.max(...tl)-tb)/1000),lc=tl.length*rh,loff=listArea(key+'L',px,ly,pw,lh,lc);
   for(let r=0;r<tl.length;r++){const j=tl.length-1-r,i=t[j],ms=L[i],y=ly+r*rh-loff,cy=y+rh/2;if(y+rh<ly||y>H)continue;
