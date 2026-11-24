@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v60';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v61';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -322,6 +322,8 @@ function isDay(){const m=saved.theme||'auto';if(m==='giorno')return true;if(m===
   if(now()-dayCache.t>30000){const g=dev.gps&&dev.gps.lat?dev.gps:(saved.tracks[0]||{lat:44.5,lon:11.3});dayCache={t:now(),v:sunElev(g.lat,g.lon,new Date())>-3}}
   return dayCache.v}
 let W=856;const H=412,C={...NIGHT};
+// margine sinistro in gara: la tacca della fotocamera dello ZenFone copre il bordo
+const RL=40;
 let scale=1;
 let lastVW=0,lastVH=0,lastIW=0,lastIH=0;
 const stage=$('stage');
@@ -518,55 +520,50 @@ function deltaTrend(){const Hh=dev.dHist||[];if(Hh.length<2)return 0;const a=Hh[
 // barra LED: 10 segmenti, ognuno un decimo; a sinistra verde (guadagno), a destra rosso (perdita)
 // barra dei settori: verde = quel tratto più veloce del giro migliore, rosso = più lento, grigio chiaro = dove sei adesso
 // barra dei settori: verde = quel tratto più veloce del giro migliore, rosso = più lento, grigio = dove sei adesso
-function sectorBar(y,valid,hgt=13){const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=7,sw=(W-28-gp*(ns-1))/ns,sd=dev.sd;
+function sectorBar(y,valid,hgt=22){const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=7,x0=RL,sw=(W-16-x0-gp*(ns-1))/ns,sd=dev.sd;
   const prev=sd&&sd.idx===0&&dev.sdPrev,res=prev?dev.sdPrev:(sd&&sd.res)||[],cur=prev?-1:res.length;
   for(let k=0;k<ns;k++){let c=C.off;
     if(valid&&k<res.length){const r=res[k];c=r<-0.005?C.gain:r>0.005?C.loss:C.dim}else if(valid&&sd&&k===cur)c=C.faint;
-    rr(14+k*(sw+gp),y,sw,hgt,4,c)}}
-function bottomCells(){const sec=saved.dmode!=='live',sd=dev.sd,cells=[['ultimo',lt.laps.length?fmt(lt.lastMs):'--',C.fg]];
-  cells.push(['previsto',(sec?lt.bestMs>0:lt.deltaValid)?(sec?(sd&&sd.idx>0?fmt(sd.pred):'--'):fmt(Math.max(0,lt.bestMs+lt.delta*1000))):'--',C.fg]);
-  cells.push(['migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
-  const cw=(W-32-24)/3,hl=now()<dev.lapHl,y=H-82;
-  cells.forEach(([l,v,c],k)=>{const x=16+k*(cw+12)+cw/2,fl=k===0&&hl;
-    txt(l,x,y+10,18,fl?C.accentTxt:C.dim,'center',500,'m');num(v,x,y+46,40,v==='--'?C.faint:fl?C.accentTxt:c,'center',700,cw)})}
+    rr(x0+k*(sw+gp),y,sw,hgt,6,c)}}
+// in gara solo previsto e migliore, grandi (l'ultimo lo vedi al traguardo o nella vista Tempo)
+function bottomCells(){const sec=saved.dmode!=='live',sd=dev.sd;
+  const cells=[['previsto',(sec?lt.bestMs>0:lt.deltaValid)?(sec?(sd&&sd.idx>0?fmt(sd.pred):'--'):fmt(Math.max(0,lt.bestMs+lt.delta*1000))):'--'],['migliore',lt.bestMs?fmt(lt.bestMs):'--']];
+  const cw=(W-16-RL-12)/2,y=H-78;
+  cells.forEach(([l,v],k)=>{const x=RL+k*(cw+12)+cw/2;txt(l,x,y+10,18,C.dim,'center',500,'m');num(v,x,y+46,44,v==='--'?C.faint:C.fg,'center',700,cw)})}
+// gara: barra sottile in alto, settori spessi, numero grande, previsto e migliore. A sinistra si lascia spazio alla tacca della fotocamera
 function drawRace(){
   const n=lt.laps.length,lost=!dev.fix;
-  statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'',true);
-  const top=40,midTop=87,midBot=H-82,mid=(midTop+midBot)/2;
+  const acc=dev.fix?`±${Math.round(dev.hAcc)} m`:'Nessun GPS';txt(acc,RL,18,13,!dev.fix?C.lossTxt:dev.hAcc>8?C.warn:C.dim,'left',500,'m');
+  if(saved.source==='demo'){cx.font=FM(13);const lx=RL+cx.measureText(acc).width+14;const open=$('demo').classList.contains('on');txt('Demo',lx,18,16,open?C.fg:C.accentTxt,'left',600);hits.push({id:'demoBadge',x:lx-8,y:0,w:56,h:36,act:toggleDemoPanel})}
+  if(saved.showSpeed&&dev.fix)txt(`${Math.round(dev.speed)} km/h`,W/2,18,16,C.fg,'center',700);
+  if(lt.line&&(lt.inLap||n))num(`G${n+(lt.inLap?1:0)}`,W-16,18.5,24,C.fg,'right',700);
+  const barY=36,midTop=58+(lost?30:0),midBot=H-78,mid=(midTop+midBot)/2,cxm=RL+(W-16-RL)/2,bw=W-16-RL;
   if(now()<dev.flashUntil&&n){
     // giro migliore o record: i settori lampeggiano verdi come led e il tempo del giro è verde
-    const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=7,sw=(W-28-gp*(ns-1))/ns,on=Math.floor((dev.flashUntil-now())/280)%2===0;
-    for(let k=0;k<ns;k++)rr(14+k*(sw+gp),top+2,sw,20,5,on?C.gain:C.off);
-    txt(dev.trackRec?'record della pista':'miglior giro',24,top+42,18,C.gainTxt,'left',500,'m');
-    num(fmt(lt.lastMs),W/2,mid-16,140,C.gainTxt,'center',700,W-48);
-    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000),W/2,mid+82,30,C.gainTxt,'center',700,W-60);
+    const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=7,sw=(bw-gp*(ns-1))/ns,on=Math.floor((dev.flashUntil-now())/280)%2===0;
+    for(let k=0;k<ns;k++)rr(RL+k*(sw+gp),barY,sw,22,6,on?C.gain:C.off);
+    txt(dev.trackRec?'record della pista':'miglior giro',cxm,mid-78,16,C.gainTxt,'center',500,'m');
+    num(fmt(lt.lastMs),cxm,mid,140,C.gainTxt,'center',700,bw);
+    const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000),cxm,mid+80,30,C.gainTxt,'center',700,bw);
     bottomCells();hits.push({id:'flash',x:0,y:SB,w:W,h:H-SB,act:()=>dev.flashUntil=0});return}
-  let y0=top;
-  if(lost){cx.fillStyle=C.lossDeep;cx.fillRect(0,top,W,30);fitT('GPS perso: tempi sospesi finché torna il segnale',W/2,top+15,16,'#ffffff',W-20,'center',700);y0+=30}
-  if(!lt.line){icon('flag',W/2,y0+90,40,C.dim);txt('Nessun traguardo',W/2,y0+150,38,C.fg,'center',700);txt('Fermati per impostarlo',W/2,y0+192,20,C.dim,'center',500);return}
-  if(!lt.inLap){icon('arrowR',W/2,y0+96,48,C.dim);txt('Passa sul traguardo',W/2,y0+160,44,C.fg,'center',700);txt('Il giro parte appena lo attraversi',W/2,y0+204,20,C.dim,'center',500);return}
+  if(lost){cx.fillStyle=C.lossDeep;cx.fillRect(0,barY+28,W,30);fitT('GPS perso: tempi sospesi finché torna il segnale',cxm,barY+43,16,'#ffffff',bw,'center',700)}
+  if(!lt.line){icon('flag',cxm,130,40,C.dim);txt('Nessun traguardo',cxm,190,38,C.fg,'center',700);txt('Fermati per impostarlo',cxm,232,20,C.dim,'center',500);return}
+  if(!lt.inLap){icon('arrowR',cxm,136,48,C.dim);txt('Passa sul traguardo',cxm,200,44,C.fg,'center',700);txt('Il giro parte appena lo attraversi',cxm,244,20,C.dim,'center',500);return}
   const sec=saved.dmode!=='live',sd=dev.sd,view=saved.view,valid=sec?lt.bestMs>0:lt.deltaValid,d=sec?(sd?sd.val:null):lt.delta,dc=d<0?C.gainTxt:C.lossTxt;
-  sectorBar(y0+2,valid);
-  const ly=y0+36,big=lost?160:190;
-  if(view===0&&valid){
-    const sp=trackSplits(saved.tracks[dev.track]),ns=sp.length+1,tr=sec?0:deltaTrend();
-    txt('delta',24,ly,18,C.dim,'left',500,'m');
-    const r=sec?(sd&&sd.idx>0?`settore ${sd.idx} di ${ns}`:(d!=null?'al traguardo':'')):(Math.abs(tr)>0.04?(tr<0?'in recupero':'in perdita'):'');
-    if(r)txt(r,W-24,ly,18,C.dim,'right',500,'m');
-    if(d==null){num('—',W/2,mid,120,C.faint,'center',700,W-48);txt('Il delta arriva fra pochi secondi',W/2,mid+80,20,C.dim,'center',500)}
-    else if(Math.abs(d)<0.005)num('0.00',W/2,mid+4,big,C.fg,'center',700,W-48);
-    else num(sgn(d),W/2,mid+4,big,dc,'center',700,W-48)}
-  else if(!valid){
-    txt(`giro ${n+1}`,24,ly,18,C.dim,'left',500,'m');
-    txt('Giro di riferimento',W/2,mid-14,40,C.fg,'center',700);
-    fitT('Dal prossimo giro vedi il delta, verde o rosso',W/2,mid+30,20,C.dim,W-40,'center',500)}
+  sectorBar(barY,valid);
+  if(view===0&&valid){const big=lost?190:230;
+    if(d==null){num('—',cxm,mid,120,C.faint,'center',700,bw);txt('Il delta arriva fra pochi secondi',cxm,mid+80,20,C.dim,'center',500)}
+    else if(Math.abs(d)<0.005)num('0.00',cxm,mid+6,big,C.fg,'center',700,bw);
+    else num(sgn(d),cxm,mid+6,big,dc,'center',700,bw)}
+  else if(!valid){txt('Giro di riferimento',cxm,mid-14,40,C.fg,'center',700);
+    fitT('Dal prossimo giro vedi il delta, verde o rosso',cxm,mid+30,20,C.dim,bw,'center',500)}
   else{const g=lt.lastMs-lt.bestMs;
-    txt('ultimo giro',24,ly,18,C.dim,'left',500,'m');
-    num(fmt(lt.lastMs),W/2,mid-14,lost?124:140,C.fg,'center',700,W-48);
-    if(g>0)num(gap(g/1000),W/2,mid+82,30,C.lossTxt,'center',700,W-60);
-    else txt('miglior giro',W/2,mid+82,20,C.gainTxt,'center',500,'m')}
+    txt('ultimo giro',cxm,mid-78,16,C.dim,'center',500,'m');
+    num(fmt(lt.lastMs),cxm,mid,lost?124:140,C.fg,'center',700,bw);
+    if(g>0)num(gap(g/1000),cxm,mid+80,30,C.lossTxt,'center',700,bw);
+    else txt('miglior giro',cxm,mid+80,18,C.gainTxt,'center',500,'m')}
   bottomCells();
-  if(valid)hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}
+  if(valid)hits.push({id:'view',x:0,y:36,w:W,h:H-36,act:()=>{saved.view=1-saved.view;persist()}})}
 // ---------- liste trascinabili ----------
 let scrollZone=null,drag=null,zones=[];
 function listArea(key,x,y,w,h,content){const max=Math.max(0,content-h);let v=dev[key]||0;
