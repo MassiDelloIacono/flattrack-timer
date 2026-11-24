@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v56';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v57';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -480,18 +480,18 @@ function drawReady(){statusBar(trackName()||'','');const n=lt.laps.length,tk=sav
     txt(lt.inLap?'Il tempo riprende appena superi i 15 km/h':'Il cronometro parte da solo',W/2,y+117,22,C.dim,'center',500);
     const cw=(W-40-16)/2,cy=y+170;
     [['record della pista',tk&&tk.record?fmt(tk.record):'--',tk&&tk.record?C.gainTxt:C.faint],['giro minimo',effMinLap()+' s',C.fg]].forEach(([l,v,c],k)=>{const x=20+k*(cw+16)+cw/2;
-      txt(l,x,cy,16,C.dim,'center',500,'m');num(v,x,cy+40,50,c,'center',700,cw)})}
+      txt(l,x,cy,16,C.dim,'center',500,'m');num(v,x,cy+40,44,c,'center',700,cw)})}
   else{const avg=lt.laps.reduce((a,b)=>a+b,0)/n,rec=tk&&tk.record&&tk.record<lt.bestMs,pink=saved.pinkHero!==false;
     const hx=16,hy=56,hw=W-32,hh=176,map=tk&&tk.trace&&W>=640,mw=map?220:0,ink=pink?C.onAccent:C.gainTxt,inkDim=pink?C.onAccentDim:C.dim;
     if(pink)rr(hx,hy,hw,hh,26,C.accent);
     const lx=hx+22,rx=hx+hw-22-(map?mw+37:0);
     txt('miglior giro',lx,hy+26,15,inkDim,'left',500,'m');txt(lapLabel(lt.bestNo-1,lt.laps,lt.ends),rx,hy+26,15,inkDim,'right',500,'m');
-    num(fmt(lt.bestMs),lx,hy+(rec?88:96),rec?92:104,ink,'left',700,rx-lx);
+    num(fmt(lt.bestMs),lx,hy+(rec?86:94),88,ink,'left',700,rx-lx);
     if(rec){const rt='record '+fmt(tk.record);cx.font=FM(15);const rw=cx.measureText(rt).width+28;rr(lx,hy+hh-42,rw,26,13,pink?C.onAccent:C.surface);txt(rt,lx+14,hy+hh-29,15,pink?C.accent:C.fg,'left',500,'m')}
     if(map){cx.fillStyle=pink?'rgba(26,13,18,.25)':C.line;cx.fillRect(hx+hw-22-mw-18,hy+16,1,hh-32);drawTraceMini(tk,hx+hw-22-mw,hy+18,mw,hh-36,pink?C.onAccent:null);
       hits.push({id:'heroMap',x:hx+hw-22-mw-18,y:hy,w:mw+40,h:hh,act:()=>{dev.tsel=dev.track;dev.screen='trackmap'}})}
     const cells=[['ultimo',fmt(lt.lastMs),lt.lastMs===lt.bestMs?C.gainTxt:C.fg],['media',fmt(avg),C.fg],['giri',String(n),C.fg],['turni',String(turnsOf(lt.laps,lt.ends).length),C.fg]];
-    const cy=hy+hh+14,cw=(W-32-36)/4;let cs=40;cells.forEach(([,v])=>{while(cs>18&&numMetrics(v,cs,700).tot>cw-8)cs--});
+    const cy=hy+hh+14,cw=(W-32-36)/4;let cs=34;cells.forEach(([,v])=>{while(cs>18&&numMetrics(v,cs,700).tot>cw-8)cs--});
     cells.forEach(([l,v,c],k)=>{const x=16+k*(cw+12)+cw/2;txt(l,x,cy+10,16,C.dim,'center',500,'m');num(v,x,cy+42,cs,c,'center',700)})}
   tabBar()}
 // ---------- gara ----------
@@ -509,7 +509,7 @@ function bottomCells(){const sec=saved.dmode!=='live',sd=dev.sd,cells=[['ultimo'
   cells.push(['migliore',lt.bestMs?fmt(lt.bestMs):'--',C.fg]);
   const cw=(W-32-24)/3,hl=now()<dev.lapHl,y=H-82;
   cells.forEach(([l,v,c],k)=>{const x=16+k*(cw+12)+cw/2,fl=k===0&&hl;
-    txt(l,x,y+10,18,fl?C.accentTxt:C.dim,'center',500,'m');num(v,x,y+46,46,v==='--'?C.faint:fl?C.accentTxt:c,'center',700,cw)})}
+    txt(l,x,y+10,18,fl?C.accentTxt:C.dim,'center',500,'m');num(v,x,y+46,40,v==='--'?C.faint:fl?C.accentTxt:c,'center',700,cw)})}
 function drawRace(){
   const n=lt.laps.length,lost=!dev.fix;
   statusBar(saved.showSpeed&&dev.fix?`${Math.round(dev.speed)} km/h`:'',lt.line&&(lt.inLap||n)?`G${n+(lt.inLap?1:0)}`:'',true);
@@ -519,7 +519,7 @@ function drawRace(){
     const ns=trackSplits(saved.tracks[dev.track]).length+1,gp=7,sw=(W-28-gp*(ns-1))/ns,on=Math.floor((dev.flashUntil-now())/280)%2===0;
     for(let k=0;k<ns;k++)rr(14+k*(sw+gp),top+2,sw,20,5,on?C.gain:C.off);
     txt(dev.trackRec?'record della pista':'miglior giro',24,top+42,18,C.gainTxt,'left',500,'m');
-    num(fmt(lt.lastMs),W/2,mid-16,160,C.gainTxt,'center',700,W-48);
+    num(fmt(lt.lastMs),W/2,mid-16,140,C.gainTxt,'center',700,W-48);
     const ref=dev.trackRec?dev.oldTrackRec:lt.prevBest;if(ref)num(gap((lt.lastMs-ref)/1000),W/2,mid+82,30,C.gainTxt,'center',700,W-60);
     bottomCells();hits.push({id:'flash',x:0,y:SB,w:W,h:H-SB,act:()=>dev.flashUntil=0});return}
   let y0=top;
@@ -543,8 +543,8 @@ function drawRace(){
     fitT('Dal prossimo giro vedi il delta, verde o rosso',W/2,mid+30,20,C.dim,W-40,'center',500)}
   else{const g=lt.lastMs-lt.bestMs;
     txt('ultimo giro',24,ly,18,C.dim,'left',500,'m');
-    num(fmt(lt.lastMs),W/2,mid-14,lost?140:160,C.fg,'center',700,W-48);
-    if(g>0)num(gap(g/1000),W/2,mid+82,32,C.lossTxt,'center',700,W-60);
+    num(fmt(lt.lastMs),W/2,mid-14,lost?124:140,C.fg,'center',700,W-48);
+    if(g>0)num(gap(g/1000),W/2,mid+82,30,C.lossTxt,'center',700,W-60);
     else txt('miglior giro',W/2,mid+82,20,C.gainTxt,'center',500,'m')}
   bottomCells();
   if(valid)hits.push({id:'view',x:0,y:SB,w:W,h:H-SB,act:()=>{saved.view=1-saved.view;persist()}})}
@@ -572,8 +572,8 @@ function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=58;
     txt(tname(k),24,y+21,18,C.fg,'left',700);cx.font=FL(18,700);
     if(st)txt(st,32+cx.measureText(tname(k)).width,y+22,13,C.faint,'left',500,'m');
     txt(tl.length===1?'1 giro':`${tl.length} giri`,10+lw-14,y+22,13,C.dim,'right',500,'m');
-    fitT(kOf(t[0])||trackName()||'',24,y+51,13,C.accentTxt,lw-150,'left',500,'m');
-    num(fmt(tb),10+lw-14,y+50,28,isTB?C.gainTxt:C.fg,'right',700);
+    fitT(kOf(t[0])||trackName()||'',24,y+51,13,C.accentTxt,lw-24-numMetrics(fmt(tb),24,700).tot-24,'left',500,'m');
+    num(fmt(tb),10+lw-14,y+50,24,isTB?C.gainTxt:C.fg,'right',700);
     const vy=Math.max(y,top),vh=Math.min(y+ch,H)-vy;if(vh>6)hits.push({id:key+'t'+k,x:0,y:vy,w:lw+14,h:vh,act:()=>{dev[key+'Sel']=k;dev[key+'L']=0;dev[key+'LV']=0}})}
   endList(key+'T',10,top,lw,ah,tc);
   const px=10+lw+10,pw=W-px-10,t=T[sel],tl=t.map(i=>L[i]),tb=L[bestOf[kOf(t[0])]],avg=tl.reduce((a,b)=>a+b,0)/tl.length;
@@ -584,8 +584,8 @@ function lapList(L,E,key,live,K){const n=L.length,T=turnsOf(L,E,K),top=58;
   const ly=top+50,lh=ah-60,rh=40,spread=Math.max(0.3,(Math.max(...tl)-tb)/1000),lc=tl.length*rh,loff=listArea(key+'L',px,ly,pw,lh,lc);
   for(let r=0;r<tl.length;r++){const j=tl.length-1-r,i=t[j],ms=L[i],y=ly+r*rh-loff,cy=y+rh/2;if(y+rh<ly||y>H)continue;
     const isB=i===bestOf[kOf(i)],g=(ms-tb)/1000;
-    num(String(j+1),px+38,cy,18,C.faint,'right',700);num(fmt(ms),px+50,cy,28,isB?C.gainTxt:C.fg,'left',700);
-    const bx=px+50+Math.max(110,numMetrics(fmt(ms),28,700).tot)+12,bwid=Math.max(30,px+pw-16-98-bx);
+    num(String(j+1),px+38,cy,18,C.faint,'right',700);num(fmt(ms),px+50,cy,24,isB?C.gainTxt:C.fg,'left',700);
+    const bx=px+50+Math.max(120,numMetrics(fmt(ms),24,700).tot)+12,bwid=Math.max(30,px+pw-16-98-bx);
     rr(bx,cy-5,bwid,10,5,C.btn);rr(bx,cy-5,Math.max(10,bwid*(0.08+0.92*Math.min(1,g/spread))),10,5,isB?C.gain:C.faint);
     if(isB)txt('migliore',px+pw-16,cy,14,C.gainTxt,'right',500,'m');else num(gap(g),px+pw-16,cy,20,C.dim,'right',700);
     if(live&&i===n-1)txt('ultimo',bx,cy-13,11,C.faint,'left',500,'m')}
@@ -612,7 +612,7 @@ function drawDays(){const D=saved.days||[],n=D.length;header('Giornate',()=>dev.
   for(let i=0;i<n;i++){const d=dayFix(D[i]),y=top+i*rh-off;if(y+rh<top||y>H)continue;const cy=y+rh/2,b=Math.min(...d.laps),T=turnsOf(d.laps,d.ends,d.trk).length,tks=dayTracks(d);
     const nm=dayName(d.date);txt(nm.charAt(0).toUpperCase()+nm.slice(1),16,cy-12,22,C.fg,'left',600);
     fitT(`${tks.join(', ')}: ${T===1?'1 turno':T+' turni'}, ${d.laps.length===1?'1 giro':d.laps.length+' giri'}`,16,cy+14,16,C.dim,W-200,'left',500);
-    if(tks.length===1)num(fmt(b),W-16,cy,32,C.gainTxt,'right',700);else txt(tks.length+' piste',W-16,cy,18,C.dim,'right',600);hline(16,y+rh-1,W-32,C.line);
+    if(tks.length===1)num(fmt(b),W-16,cy,28,C.gainTxt,'right',700);else txt(tks.length+' piste',W-16,cy,18,C.dim,'right',600);hline(16,y+rh-1,W-32,C.line);
     const vy=Math.max(y,top),vh=Math.min(y+rh,H)-vy;if(vh>4)hits.push({id:'day'+i,x:0,y:vy,w:W,h:vh,act:()=>{dev.dayIdx=i;dev.screen='day';dev.dscroll=0;dev.dscrollV=0}})}
   endList('dyscroll',0,top,W,ah,n*rh)}
 function drawDay(){const d=(saved.days||[])[dev.dayIdx];if(!d){dev.screen='days';return}
@@ -657,7 +657,7 @@ function drawTracks(){const T=saved.tracks,n=T.length;
     if(sel)rr(12,y,W-24,rh,14,C.surface);else hline(12,y+rh-1,W-24,C.line);
     if(act){cx.beginPath();cx.arc(28,cy,4,0,7);cx.fillStyle=C.accent;cx.fill()}
     const colRec=sel?W-24-3*44-16:W-24;
-    num(t.record?fmt(t.record):'--',colRec,cy,28,t.record?(sel?C.gainTxt:C.fg):C.faint,'right',700);
+    num(t.record?fmt(t.record):'--',colRec,cy,24,t.record?(sel?C.gainTxt:C.fg):C.faint,'right',700);
     const maxName=colRec-150-44;let nm=t.name;cx.font=FL(22,700);while(cx.measureText(nm).width>maxName&&nm.length>3)nm=nm.slice(0,-2)+'…';
     txt(nm,44,cy,22,sel?C.fg:C.dim,'left',sel?700:600);
     const vy=Math.max(y,top),vh=Math.min(y+rh,top+ah)-vy;if(vh>4)hits.push({id:'trow'+i,x:0,y:vy,w:W,h:vh,act:()=>dev.tsel=i});
@@ -698,7 +698,7 @@ function moveSecBoundary(tk,P,X,Y){const p=lastPt;let bj=-1,bd=50;P.forEach((q,j
 function drawSecControls(tk,x,y,w){const n=secCount(tk),F=secFracs(tk),eq=eqSplits(n),manual=F.some((f,i)=>Math.abs(f-eq[i])>1e-6);
   txt('settori',x,y,14,C.dim,'left',500,'m');
   button('secDn',x,y+16,56,44,'−',{act:()=>setSecs(tk,n-1),disabled:n<=SEC_MIN,r:12,size:24});
-  num(String(n),x+w/2,y+38,32,C.fg,'center',700);
+  num(String(n),x+w/2,y+38,28,C.fg,'center',700);
   button('secUp',x+w-56,y+16,56,44,'+',{act:()=>setSecs(tk,n+1),disabled:n>=SEC_MAX,r:12,size:24});
   if(manual)button('secEq',x,y+72,w,40,'Rimetti uguali',{ghost:true,size:16,r:12,weight:600,act:()=>setSecs(tk,n)});
   else fitT('Trascina i pallini sulla pista',x,y+84,15,C.faint,w,'left',500)}
@@ -725,8 +725,8 @@ function drawTrackMap(){const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
   const ly=H-22,lx0=mx+44,lw=mw-140;for(let i=0;i<lw;i+=2){cx.fillStyle=spdCol(i/lw);cx.fillRect(lx0+i,ly-4,2,8)}
   num(Math.round(v0)+'',lx0-10,ly,16,C.dim,'right',700);num(Math.round(v1)+' km/h',lx0+lw+10,ly,16,C.dim,'left',700);
   const rx=W-16-side;
-  txt('lunghezza',rx,top+8,14,C.dim,'left',500,'m');num(Math.round(len)+' m',rx,top+38,32,C.fg,'left',700,side);
-  txt('tempo del giro',rx,top+72,14,C.dim,'left',500,'m');num(fmt(tr.ms),rx,top+102,32,C.gainTxt,'left',700,side);
+  txt('lunghezza',rx,top+8,14,C.dim,'left',500,'m');num(Math.round(len)+' m',rx,top+38,28,C.fg,'left',700,side);
+  txt('tempo del giro',rx,top+72,14,C.dim,'left',500,'m');num(fmt(tr.ms),rx,top+102,28,C.gainTxt,'left',700,side);
   drawSecControls(tk,rx,top+136,side)}
 // ---------- conferme ----------
 function drawConfirm(title,sub,yesLbl,act,back='ready'){
