@@ -111,11 +111,13 @@ void askFastConnection() {
 
 // Due posizioni consecutive (40 ms) in 19 byte, per i telefoni che accettano solo pacchetti da 20 byte:
 //  0 u32 ora GPS della prima   4 i32 lat   8 i32 lon   12 u16 velocità cm/s
-// 14 i16 spostamento lat della seconda (1e-7°)   16 i16 spostamento lon   18 u8 precisione in dm (255 = senza fix)
+// 14 i16 spostamento lat della seconda (1e-7°)   16 i16 spostamento lon
+// 18 u8 bit7: seconda dopo 100 ms (altrimenti 40 ms); bit0-6 precisione in dm (127 = senza fix)
 bool packPair(const Pvt& a, const Pvt& b, uint8_t* out) {
   int32_t dlat = b.lat - a.lat, dlon = b.lon - a.lon;
   bool okA = a.fixOk && a.fixType >= 3, okB = b.fixOk && b.fixType >= 3;
-  if (b.iTOW - a.iTOW != 40 || okA != okB || dlat < -32768 || dlat > 32767 || dlon < -32768 || dlon > 32767) return false;
+  uint32_t gap = b.iTOW - a.iTOW;
+  if ((gap != 40 && gap != 100) || okA != okB || dlat < -32768 || dlat > 32767 || dlon < -32768 || dlon > 32767) return false;
   wr32(out + 0, a.iTOW);
   wr32(out + 4, (uint32_t)a.lat);
   wr32(out + 8, (uint32_t)a.lon);
@@ -123,7 +125,7 @@ bool packPair(const Pvt& a, const Pvt& b, uint8_t* out) {
   wr16(out + 14, (uint16_t)(int16_t)dlat);
   wr16(out + 16, (uint16_t)(int16_t)dlon);
   uint32_t dm = (a.hAccMm + 50) / 100;
-  out[18] = okA ? (dm > 254 ? 254 : dm) : 255;
+  out[18] = (gap == 100 ? 0x80 : 0) | (okA ? (dm > 126 ? 126 : dm) : 127);
   return true;
 }
 
@@ -269,7 +271,7 @@ void handleUbx() {
         chPos->notify();
         nBatch = 0;
       }
-    } else if (mode == MODE_25HZ_GPS) {
+    } else {
       // pacchetti piccoli: due posizioni compresse insieme
       if (!havePrev) { prevPvt = pvt; havePrev = true; }
       else {
@@ -283,8 +285,6 @@ void handleUbx() {
           prevPvt = pvt;
         }
       }
-    } else {
-      sendSingle(pvt);
     }
   }
 }

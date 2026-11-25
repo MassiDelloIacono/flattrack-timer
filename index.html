@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v68';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v69';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -220,12 +220,12 @@ function onBlePos(e){const dv=e.target.value,pair=dv.byteLength===19,k=pair?2:Ma
   if(saved.source!=='ble')return;
   if(pair){const a=decodeBlePair(dv);blePoint(a[0],n);blePoint(a[1],n);return}
   for(let i=0;i<k;i++)blePoint(decodeBlePos(dv,i*20),n)}
-// pacchetto da 19 byte con due posizioni a 40 ms di distanza (telefoni che accettano solo pacchetti piccoli):
+// pacchetto da 19 byte con due posizioni a 40 o 100 ms di distanza (telefoni che accettano solo pacchetti piccoli):
 // la seconda è scritta come spostamento dalla prima; direzione ricavata dal movimento, satelliti dal pacchetto di stato
 function decodeBlePair(dv){const itow=dv.getUint32(0,true),lat=dv.getInt32(4,true),lon=dv.getInt32(8,true),spd=dv.getUint16(12,true)/100,
-  dlat=dv.getInt16(14,true),dlon=dv.getInt16(16,true),a=dv.getUint8(18),ok=a!==255,acc=ok?Math.max(0.3,a/10):99,sv=ble.isv||0;
+  dlat=dv.getInt16(14,true),dlon=dv.getInt16(16,true),f=dv.getUint8(18),gap=f&128?100:40,a=f&127,ok=a!==127,acc=ok?Math.max(0.3,a/10):99,sv=ble.isv||0;
   const P=(t,la,lo)=>({itow:t,lat:la/1e7,lon:lo/1e7,spd,hdg:NaN,acc,sv,fix:ok?3:0,ok});
-  return[P(itow,lat,lon),P(itow+40,lat+dlat,lon+dlon)]}
+  return[P(itow,lat,lon),P(itow+gap,lat+dlat,lon+dlon)]}
 function blePoint(p,n){const t=bleTime(p.itow);ble.sv=p.sv;
   if(!(p.ok&&p.fix>=3)){dev.fix=false;dev.hAcc=99;dev.sats=p.sv;dev.lastT=t;dev.lastPerf=n;return}
   onGeo(p.lat,p.lon,Math.max(0.3,p.acc),p.spd,p.spd>1.5?p.hdg:null,t);dev.sats=p.sv}
