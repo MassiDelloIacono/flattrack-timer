@@ -13,7 +13,7 @@ static constexpr char UUID_SERVICE[] = "f1a70001-5e4b-4c2a-9d6f-7a3c0de0f00d";
 static constexpr char UUID_POS[] = "f1a70002-5e4b-4c2a-9d6f-7a3c0de0f00d"; // notify, 20 byte per punto
 static constexpr char UUID_CTRL[] = "f1a70003-5e4b-4c2a-9d6f-7a3c0de0f00d"; // write 1 byte: modalità
 static constexpr char UUID_INFO[] = "f1a70004-5e4b-4c2a-9d6f-7a3c0de0f00d"; // notify/read 6 byte di stato
-static const uint8_t FW_VERSION = 7;
+static const uint8_t FW_VERSION = 8;
 
 // Modalità del GPS scelte dall'app
 enum Mode : uint8_t {

@@ -6,7 +6,8 @@
 //  1. trova da solo a che velocità parla il GPS e lo porta a 115200 baud;
 //  2. lo configura (25 Hz solo GPS, oppure 10 Hz GPS+Galileo) e gli fa mandare solo UBX-NAV-PVT;
 //  3. manda le posizioni all'app, fino a 4 per pacchetto Bluetooth (20 byte l'una, ognuna con l'ora GPS esatta);
-//  4. se il GPS tace per 3 secondi lo riconfigura da capo.
+//  4. se il GPS tace per 3 secondi lo riconfigura da capo;
+//  5. manda le stesse posizioni anche sul cavo USB (per l'app Android): più veloce e sicuro del Bluetooth.
 // LED blu della scheda: lampeggio lento = nessun telefono collegato; acceso fisso = collegato e GPS con fix;
 //                       lampeggio veloce = collegato ma GPS ancora senza fix.
 
@@ -52,6 +53,31 @@ volatile uint16_t connIntUnits = 0; // intervallo di connessione attuale (unità
 volatile uint16_t peerMtu = 23;     // dimensione dei pacchetti concordata col telefono
 uint32_t sentPk = 0, sendErr = 0;   // statistiche per il monitor seriale
 uint16_t connLatency = 0;
+int usbCmdPrev = 0;                 // ultimo carattere ricevuto dal telefono sul cavo
+
+// ---------------------------------------------------------------- cavo USB
+// Pacchetto sul cavo: A5 5A, tipo (1 posizione da 20 byte, 2 stato da 7 byte), lunghezza, dati, somma.
+// La somma è (tipo + lunghezza + dati) modulo 256. Le righe di testo per il Monitor seriale restano:
+// sono solo caratteri < 0x80, quindi l'app non le confonde con i pacchetti.
+void usbFrame(uint8_t type, const uint8_t* data, uint8_t len) {
+  uint8_t f[4 + 32 + 1];
+  if (len > 32) return;
+  f[0] = 0xA5; f[1] = 0x5A; f[2] = type; f[3] = len;
+  uint8_t sum = type + len;
+  for (uint8_t i = 0; i < len; i++) { f[4 + i] = data[i]; sum += data[i]; }
+  f[4 + len] = sum;
+  // mai bloccare il programma: se il telefono non legge, il pacchetto si scarta
+  if (Serial.availableForWrite() >= len + 5) Serial.write(f, len + 5);
+}
+
+// Comandi dal telefono sul cavo: "M0" = 10 Hz GPS+Galileo, "M1" = 25 Hz solo GPS.
+void readUsbCommands() {
+  while (Serial.available()) {
+    int c = Serial.read();
+    if (usbCmdPrev == 'M' && (c == '0' || c == '1')) pendingMode = c - '0';
+    usbCmdPrev = c;
+  }
+}
 
 uint8_t mode = MODE_25HZ_GPS;
 uint8_t cfgResult = 0;              // 0 sconosciuto, 1 ACK, 2 NAK
@@ -285,6 +311,11 @@ void handleUbx() {
   pvtCount++;
   lastSats = pvt.numSV;
   lastFix = pvt.fixOk && pvt.fixType >= 3;
+  {
+    uint8_t one[20];
+    packPos(pvt, one);
+    usbFrame(1, one, 20);
+  }
   if (connected) {
     // molti telefoni non reggono 25 pacchetti al secondo: ne mando meno, con più posizioni dentro
     int ppp = pointsPerPacket();
@@ -316,6 +347,10 @@ void handleUbx() {
 void setup() {
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, HIGH);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial.setTxBufferSize(1024);
+  Serial.setTxTimeoutMs(0);         // se il cavo non è letto, non aspetto
+#endif
   Serial.begin(115200);
   prefs.begin("ftgps", false);
   mode = prefs.getUChar("mode", MODE_25HZ_GPS);
@@ -326,6 +361,7 @@ void setup() {
 }
 
 void loop() {
+  readUsbCommands();
   while (GPS.available()) {
     if (ubx.feed(GPS.read())) handleUbx();
   }
@@ -364,6 +400,7 @@ void loop() {
     info[6] = ci > 255 ? 255 : ci;
     chInfo->setValue(info, sizeof(info));
     if (connected) chInfo->notify();
+    usbFrame(2, info, sizeof(info));
     Serial.printf("[stato] %u Hz, satelliti %u, fix %d, telefono %s, pacchetto %u byte, intervallo %u ms, latenza %u, inviati %lu, errori %lu\n",
                   hzMeasured, lastSats, lastFix, connected ? "collegato" : "no", (unsigned)peerMtu,
                   (unsigned)(connIntUnits * 5 / 4), (unsigned)connLatency, (unsigned long)sentPk, (unsigned long)sendErr);

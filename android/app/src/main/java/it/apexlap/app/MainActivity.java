@@ -17,7 +17,17 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbConstants;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
+import android.hardware.usb.UsbManager;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -73,6 +83,16 @@ public class MainActivity extends Activity {
     String mtuNote = "";
     final ArrayDeque<BluetoothGattDescriptor> cccdQueue = new ArrayDeque<>();
     GeolocationPermissions.Callback geoCallback;
+    // cavo USB: la ESP32 è collegata al telefono e manda le posizioni anche sul cavo
+    static final int ESP_VID = 0x303A;
+    static final String ACTION_USB_PERM = "it.apexlap.app.USB_PERMISSION";
+    UsbManager usbManager;
+    UsbDeviceConnection usbConn;
+    UsbInterface usbIf;
+    UsbEndpoint usbIn, usbOut;
+    volatile boolean usbRun = false;
+    boolean usbActive = false;
+    boolean usbAsking = false;
     String geoOrigin;
 
     // ------------------------------------------------------------------ avvio
@@ -86,6 +106,14 @@ public class MainActivity extends Activity {
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             getWindow().setAttributes(lp);
         }
+
+        usbManager = (UsbManager) getSystemService(USB_SERVICE);
+        IntentFilter uf = new IntentFilter();
+        uf.addAction(ACTION_USB_PERM);
+        uf.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        uf.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, uf, Context.RECEIVER_EXPORTED);
+        else registerReceiver(usbReceiver, uf);
 
         BluetoothManager bm = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         adapter = bm != null ? bm.getAdapter() : null;
@@ -145,9 +173,18 @@ public class MainActivity extends Activity {
         moveTaskToBack(true);
     }
 
+    // aperta da Android quando si collega la ESP32 al cavo
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (wanted) startUsb();
+    }
+
     @Override
     protected void onDestroy() {
         wanted = false;
+        stopUsb(false);
+        try { unregisterReceiver(usbReceiver); } catch (Exception ignored) { }
         stopScan();
         if (gatt != null) { try { gatt.close(); } catch (Exception ignored) { } gatt = null; }
         super.onDestroy();
@@ -193,13 +230,14 @@ public class MainActivity extends Activity {
     class Bridge {
         @JavascriptInterface
         public void connect() {
-            main.post(() -> { wanted = true; startBle(); });
+            main.post(() -> { wanted = true; if (!startUsb()) startBle(); });
         }
 
         @JavascriptInterface
         public void disconnect() {
             main.post(() -> {
                 wanted = false;
+                stopUsb(false);
                 stopScan();
                 if (gatt != null) { try { gatt.disconnect(); gatt.close(); } catch (Exception ignored) { } gatt = null; }
                 ready = false;
@@ -208,7 +246,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setMode(int m) {
-            main.post(() -> { pendingMode = m; writeMode(); });
+            main.post(() -> { pendingMode = m; if (usbActive) usbWriteMode(); else writeMode(); });
         }
 
         @JavascriptInterface
@@ -218,7 +256,8 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String diag() {
-            return "pacchetto " + mtu + " byte (" + mtuNote + ")";
+            if (usbActive) return "via cavo USB";
+            return "Bluetooth, pacchetto " + mtu + " byte (" + mtuNote + ")";
         }
     }
 
@@ -243,7 +282,7 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------------ Bluetooth
     void startBle() {
-        if (!wanted || gatt != null || scanning) return;
+        if (!wanted || usbActive || gatt != null || scanning) return;
         if (adapter == null) { state("btoff"); return; }
         if (!blePermsOk()) { state("noperm"); askPermissions(); return; }
         if (!adapter.isEnabled()) {
@@ -329,6 +368,7 @@ public class MainActivity extends Activity {
                     ready = false;
                     try { g.close(); } catch (Exception ignored) { }
                     if (g == gatt) gatt = null;
+                    if (usbActive) return;   // va il cavo: il Bluetooth non serve
                     if (!wasReady) failures++;
                     state("lost");
                     if (wanted) main.postDelayed(MainActivity.this::startBle, 1500);
@@ -372,7 +412,7 @@ public class MainActivity extends Activity {
         @Override
         public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic c) {
             byte[] v = c.getValue();
-            if (v == null) return;
+            if (v == null || usbActive) return;
             if (POS.equals(c.getUuid())) js("window.apexBle&&apexBle.pos('" + hex(v) + "')");
             else if (INFO.equals(c.getUuid())) js("window.apexBle&&apexBle.info('" + hex(v) + "')");
         }
@@ -391,6 +431,7 @@ public class MainActivity extends Activity {
             return;
         }
         ready = true;
+        if (usbActive) { g.disconnect(); return; }
         state("on");
         writeMode();
     }
@@ -405,5 +446,122 @@ public class MainActivity extends Activity {
         c.setValue(new byte[]{(byte) pendingMode, (byte) (mtu & 255), (byte) (mtu >> 8)});
         c.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
         gatt.writeCharacteristic(c);
+    }
+    // ------------------------------------------------------------------ cavo USB
+    final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            String a = intent.getAction();
+            if (ACTION_USB_PERM.equals(a)) {
+                usbAsking = false;
+                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) && wanted) startUsb();
+            } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(a)) {
+                if (wanted) main.postDelayed(MainActivity.this::startUsb, 500);
+            } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(a)) {
+                UsbDevice d = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (d != null && d.getVendorId() == ESP_VID) stopUsb(true);
+            }
+        }
+    };
+
+    UsbDevice findEsp() {
+        if (usbManager == null) return null;
+        for (UsbDevice d : usbManager.getDeviceList().values()) if (d.getVendorId() == ESP_VID) return d;
+        return null;
+    }
+
+    /** Apre il cavo se la ESP32 è collegata. Ritorna true se il cavo è (o sta per essere) in uso. */
+    boolean startUsb() {
+        if (usbActive) return true;
+        UsbDevice d = findEsp();
+        if (d == null) return false;
+        if (!usbManager.hasPermission(d)) {
+            if (!usbAsking) {
+                usbAsking = true;
+                int flags = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+                PendingIntent pi = PendingIntent.getBroadcast(this, 0,
+                        new Intent(ACTION_USB_PERM).setPackage(getPackageName()), flags);
+                usbManager.requestPermission(d, pi);
+            }
+            return true;
+        }
+        // interfaccia dati CDC: un endpoint bulk in ingresso e uno in uscita
+        UsbInterface found = null;
+        UsbEndpoint in = null, out = null;
+        for (int i = 0; i < d.getInterfaceCount() && found == null; i++) {
+            UsbInterface it = d.getInterface(i);
+            if (it.getInterfaceClass() != UsbConstants.USB_CLASS_CDC_DATA) continue;
+            UsbEndpoint ei = null, eo = null;
+            for (int e = 0; e < it.getEndpointCount(); e++) {
+                UsbEndpoint ep = it.getEndpoint(e);
+                if (ep.getType() != UsbConstants.USB_ENDPOINT_XFER_BULK) continue;
+                if (ep.getDirection() == UsbConstants.USB_DIR_IN) ei = ep; else eo = ep;
+            }
+            if (ei != null) { found = it; in = ei; out = eo; }
+        }
+        if (found == null) return false;
+        UsbDeviceConnection c = usbManager.openDevice(d);
+        if (c == null) return false;
+        if (!c.claimInterface(found, true)) { c.close(); return false; }
+        usbConn = c;
+        usbIf = found;
+        usbIn = in;
+        usbOut = out;
+        usbActive = true;
+        usbRun = true;
+        // il Bluetooth non serve più
+        stopScan();
+        if (gatt != null) { try { gatt.disconnect(); gatt.close(); } catch (Exception ignored) { } gatt = null; }
+        ready = false;
+        Thread t = new Thread(this::usbLoop, "apexlap-usb");
+        t.setPriority(Thread.MAX_PRIORITY);
+        t.start();
+        state("usb");
+        usbWriteMode();
+        return true;
+    }
+
+    void usbLoop() {
+        final UsbDeviceConnection c = usbConn;
+        final UsbEndpoint in = usbIn;
+        final StringBuilder pos = new StringBuilder();
+        UsbFrameParser parser = new UsbFrameParser((type, data) -> {
+            if (type == 1) pos.append(hex(data));
+            else if (type == 2) js("window.apexBle&&apexBle.info('" + hex(data) + "')");
+        });
+        byte[] buf = new byte[1024];
+        while (usbRun) {
+            int n = c.bulkTransfer(in, buf, buf.length, 250);
+            if (n > 0) {
+                parser.feed(buf, n);
+                if (pos.length() > 0) {
+                    js("window.apexBle&&apexBle.pos('" + pos + "')");
+                    pos.setLength(0);
+                }
+            } else if (n < 0) {
+                try { Thread.sleep(20); } catch (InterruptedException e) { return; }
+            }
+        }
+    }
+
+    void stopUsb(boolean lost) {
+        if (!usbActive) return;
+        usbRun = false;
+        usbActive = false;
+        try { usbConn.releaseInterface(usbIf); } catch (Exception ignored) { }
+        try { usbConn.close(); } catch (Exception ignored) { }
+        usbConn = null;
+        if (lost) {
+            state("lost");
+            if (wanted) main.postDelayed(this::startBle, 1000);
+        }
+    }
+
+    void usbWriteMode() {
+        if (!usbActive || usbOut == null || pendingMode < 0) return;
+        final UsbDeviceConnection c = usbConn;
+        final UsbEndpoint out = usbOut;
+        final byte[] cmd = new byte[]{'M', (byte) ('0' + pendingMode)};
+        new Thread(() -> { try { c.bulkTransfer(out, cmd, cmd.length, 500); } catch (Exception ignored) { } }).start();
     }
 }

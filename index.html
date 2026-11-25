@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v72';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v73';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -245,8 +245,8 @@ window.apexBle={
   pos(h){if(ble.on)onBlePos({target:{value:hexDV(h)}})},
   info(h){onBleInfo({target:{value:hexDV(h)}})},
   state(st){
-    if(st==='on'){ble.on=true;ble.t0=now();ble.n=0;ble.pk=0;if(saved.source==='ble')stopPhoneGps();
-      try{ApexNative.setMode(saved.extMode==null?1:saved.extMode)}catch(e){}toast('GPS esterno collegato')}
+    if(st==='on'||st==='usb'){ble.on=true;ble.t0=now();ble.n=0;ble.pk=0;if(saved.source==='ble')stopPhoneGps();
+      try{ApexNative.setMode(saved.extMode==null?1:saved.extMode)}catch(e){}toast(st==='usb'?'GPS esterno collegato via cavo':'GPS esterno collegato')}
     else if(st==='lost'){const was=ble.on;ble.on=false;ble.hz=0;if(saved.source==='ble'){if(was)toast('GPS esterno perso: uso quello del telefono');startPhoneGps()}}
     else if(st==='scan')toast('Cerco il GPS esterno…');
     else if(st==='notfound')toast('GPS esterno non trovato: è acceso?');
