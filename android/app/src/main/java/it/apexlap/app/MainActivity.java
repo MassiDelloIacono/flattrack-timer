@@ -401,7 +401,8 @@ public class MainActivity extends Activity {
         if (s == null) return;
         BluetoothGattCharacteristic c = s.getCharacteristic(CTRL);
         if (c == null) return;
-        c.setValue(new byte[]{(byte) pendingMode});
+        // modalità + dimensione dei pacchetti concordata, così il GPS ci mette dentro più posizioni
+        c.setValue(new byte[]{(byte) pendingMode, (byte) (mtu & 255), (byte) (mtu >> 8)});
         c.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
         gatt.writeCharacteristic(c);
     }

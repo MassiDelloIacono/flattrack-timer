@@ -41,7 +41,7 @@ BLECharacteristic* chInfo = nullptr;
 volatile bool connected = false;
 volatile int pendingMode = -1;      // modalità chiesta dall'app, applicata nel loop
 uint16_t connId = 0;                // connessione Bluetooth attiva (serve per leggere l'MTU)
-uint8_t batch[80];                  // posizioni in attesa di partire insieme
+uint8_t batch[180];                  // posizioni in attesa di partire insieme
 uint8_t nBatch = 0;
 Pvt prevPvt;                        // posizione in attesa della compagna (pacchetto doppio da 19 byte)
 bool havePrev = false;
@@ -90,6 +90,11 @@ class CtrlCb : public BLECharacteristicCallbacks {
     if (v.length() >= 1) {
       uint8_t m = (uint8_t)v[0];
       if (m == MODE_10HZ_MULTI || m == MODE_25HZ_GPS) pendingMode = m;
+    }
+    // l'app Android manda anche la dimensione dei pacchetti che ha concordato col telefono
+    if (v.length() >= 3) {
+      uint16_t m = (uint8_t)v[1] | ((uint16_t)(uint8_t)v[2] << 8);
+      if (m > peerMtu && m <= 517) peerMtu = m;
     }
   }
 };
@@ -257,11 +262,12 @@ void configureGps() {
 }
 
 // Quante posizioni stanno in un pacchetto: dipende dall'MTU concordato col telefono.
-// A 25 Hz ne metto fino a 4 (un pacchetto ogni 160 ms), a 10 Hz fino a 2 (ogni 200 ms).
+// A 25 Hz ne metto fino a 8 (un pacchetto ogni 320 ms), a 10 Hz fino a 4 (ogni 400 ms):
+// pochi pacchetti grandi passano anche quando il telefono concede pochi scambi al secondo.
 int pointsPerPacket() {
   uint16_t mtu = peerMtu;
   int fit = (mtu > 23 ? mtu - 3 : 20) / 20;
-  int want = (mode == MODE_25HZ_GPS) ? 4 : 2;
+  int want = (mode == MODE_25HZ_GPS) ? 8 : 4;
   if (fit < 1) fit = 1;
   return fit < want ? fit : want;
 }
