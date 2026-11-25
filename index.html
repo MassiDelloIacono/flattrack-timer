@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v64';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v65';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -208,14 +208,18 @@ const BLE_SVC='f1a70001-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_POS='f1a70002-5e4b-4c2a
   BLE_CTRL='f1a70003-5e4b-4c2a-9d6f-7a3c0de0f00d',BLE_INFO='f1a70004-5e4b-4c2a-9d6f-7a3c0de0f00d';
 const ble={dev:null,pos:null,ctrl:null,info:null,on:false,busy:false,hz:0,n:0,t0:0,off:null,last:-1,sv:0,state:0,devHz:0,fw:0};
 // pacchetto da 20 byte: ora GPS, lat, lon, velocità, direzione, precisione, satelliti, fix
-function decodeBlePos(dv){const f=dv.getUint8(19);return{itow:dv.getUint32(0,true),lat:dv.getInt32(4,true)/1e7,lon:dv.getInt32(8,true)/1e7,
-  spd:dv.getUint16(12,true)/100,hdg:dv.getUint16(14,true)/100,acc:dv.getUint16(16,true)/100,sv:dv.getUint8(18),fix:f&7,ok:!!(f&8)}}
+function decodeBlePos(dv,o=0){const f=dv.getUint8(o+19);return{itow:dv.getUint32(o,true),lat:dv.getInt32(o+4,true)/1e7,lon:dv.getInt32(o+8,true)/1e7,
+  spd:dv.getUint16(o+12,true)/100,hdg:dv.getUint16(o+14,true)/100,acc:dv.getUint16(o+16,true)/100,sv:dv.getUint8(o+18),fix:f&7,ok:!!(f&8)}}
 // ogni punto porta l'ora GPS esatta: la allineo una sola volta all'orologio del telefono, così il ritardo
 // del Bluetooth non entra nei tempi e il passaggio al GPS del telefono (se il Bluetooth cade) resta coerente
 function bleTime(itow){if(ble.off==null)ble.off=Date.now()-itow-60;else if(ble.last>=0&&itow<ble.last-302400000)ble.off+=604800000;ble.last=itow;return itow+ble.off}
-function onBlePos(e){const p=decodeBlePos(e.target.value),n=now();ble.n++;if(n-ble.t0>=1000){ble.hz=Math.round(ble.n*1000/(n-ble.t0));ble.n=0;ble.t0=n}
+// un pacchetto può contenere più posizioni (20 byte l'una): il firmware le raggruppa perché
+// il Bluetooth del telefono non regge 25 pacchetti al secondo; ognuna ha la sua ora GPS
+function onBlePos(e){const dv=e.target.value,k=Math.floor(dv.byteLength/20),n=now();ble.n+=k;
+  if(n-ble.t0>=1000){ble.hz=Math.round(ble.n*1000/(n-ble.t0));ble.n=0;ble.t0=n}
   if(saved.source!=='ble')return;
-  const t=bleTime(p.itow);ble.sv=p.sv;
+  for(let i=0;i<k;i++)blePoint(decodeBlePos(dv,i*20),n)}
+function blePoint(p,n){const t=bleTime(p.itow);ble.sv=p.sv;
   if(!(p.ok&&p.fix>=3)){dev.fix=false;dev.hAcc=99;dev.sats=p.sv;dev.lastT=t;dev.lastPerf=n;return}
   onGeo(p.lat,p.lon,Math.max(0.3,p.acc),p.spd,p.spd>1.5?p.hdg:null,t);dev.sats=p.sv}
 function onBleInfo(e){const d=e.target.value;if(d.byteLength>=6){ble.fw=d.getUint8(0);ble.devHz=d.getUint8(2);ble.state=d.getUint8(3)}}

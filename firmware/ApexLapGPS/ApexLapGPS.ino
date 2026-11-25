@@ -5,7 +5,7 @@
 // Cosa fa:
 //  1. trova da solo a che velocità parla il GPS e lo porta a 115200 baud;
 //  2. lo configura (25 Hz solo GPS, oppure 10 Hz GPS+Galileo) e gli fa mandare solo UBX-NAV-PVT;
-//  3. manda ogni posizione all'app in un pacchetto da 20 byte con l'ora GPS esatta;
+//  3. manda le posizioni all'app, fino a 4 per pacchetto Bluetooth (20 byte l'una, ognuna con l'ora GPS esatta);
 //  4. se il GPS tace per 3 secondi lo riconfigura da capo.
 // LED blu della scheda: lampeggio lento = nessun telefono collegato; acceso fisso = collegato e GPS con fix;
 //                       lampeggio veloce = collegato ma GPS ancora senza fix.
@@ -37,6 +37,9 @@ BLECharacteristic* chPos = nullptr;
 BLECharacteristic* chInfo = nullptr;
 volatile bool connected = false;
 volatile int pendingMode = -1;      // modalità chiesta dall'app, applicata nel loop
+uint16_t connId = 0;                // connessione Bluetooth attiva (serve per leggere l'MTU)
+uint8_t batch[80];                  // posizioni in attesa di partire insieme
+uint8_t nBatch = 0;
 
 uint8_t mode = MODE_25HZ_GPS;
 uint8_t cfgResult = 0;              // 0 sconosciuto, 1 ACK, 2 NAK
@@ -49,6 +52,8 @@ class ServerCb : public BLEServerCallbacks {
 #if defined(CONFIG_BLUEDROID_ENABLED)
   void onConnect(BLEServer* s, esp_ble_gatts_cb_param_t* param) override {
     connected = true;
+    connId = param->connect.conn_id;
+    nBatch = 0;
     // intervallo di connessione corto (7,5-20 ms) per reggere 25 punti al secondo
     s->updateConnParams(param->connect.remote_bda, 6, 16, 0, 400);
   }
@@ -74,6 +79,7 @@ class CtrlCb : public BLECharacteristicCallbacks {
 
 void setupBle() {
   BLEDevice::init(BLE_NAME);
+  BLEDevice::setMTU(185);            // pacchetti più grandi: più posizioni per volta
   server = BLEDevice::createServer();
   server->setCallbacks(new ServerCb());
   BLEService* svc = server->createService(UUID_SERVICE);
@@ -167,6 +173,19 @@ void configureGps() {
   digitalWrite(PIN_LED, HIGH);
 }
 
+// Quante posizioni stanno in un pacchetto: dipende dall'MTU concordato col telefono.
+// A 25 Hz ne metto fino a 4 (un pacchetto ogni 160 ms), a 10 Hz fino a 2 (ogni 200 ms).
+int pointsPerPacket() {
+  uint16_t mtu = 23;
+#if defined(CONFIG_BLUEDROID_ENABLED)
+  mtu = server->getPeerMTU(connId);
+#endif
+  int fit = (mtu > 23 ? mtu - 3 : 20) / 20;
+  int want = (mode == MODE_25HZ_GPS) ? 4 : 2;
+  if (fit < 1) fit = 1;
+  return fit < want ? fit : want;
+}
+
 void handleUbx() {
   if (ubx.cls == 0x05 && ubx.len >= 2 && ubx.buf[0] == 0x06 && ubx.buf[1] == 0x8A) {
     cfgResult = (ubx.id == 0x01) ? 1 : 2;   // ACK-ACK / ACK-NAK a un VALSET
@@ -180,10 +199,14 @@ void handleUbx() {
   lastSats = pvt.numSV;
   lastFix = pvt.fixOk && pvt.fixType >= 3;
   if (connected) {
-    uint8_t pkt[20];
-    packPos(pvt, pkt);
-    chPos->setValue(pkt, sizeof(pkt));
-    chPos->notify();
+    // molti telefoni non reggono 25 pacchetti al secondo: ne mando meno, con più posizioni dentro
+    packPos(pvt, batch + nBatch * 20);
+    nBatch++;
+    if (nBatch >= pointsPerPacket()) {
+      chPos->setValue(batch, nBatch * 20);
+      chPos->notify();
+      nBatch = 0;
+    }
   }
 }
 

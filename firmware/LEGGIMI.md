@@ -57,5 +57,6 @@ Significato del LED:
 ## Note tecniche
 
 - Il GPS viene riconfigurato a ogni accensione, solo in RAM: non resta modificato in modo permanente.
-- Ogni pacchetto Bluetooth porta l'ora GPS del punto, quindi il ritardo del Bluetooth non entra nei tempi sul giro.
+- Ogni pacchetto Bluetooth porta fino a 4 posizioni, ognuna con la sua ora GPS: così bastano 6 pacchetti al secondo per avere 25 punti, e il ritardo del Bluetooth non entra nei tempi sul giro.
+- Serve il pacchetto schede esp32 3.3.x: la 4.0 non ha più la libreria BLE usata qui.
 - Formato dei pacchetti e UUID del servizio sono in `ftgps_core.h`.
