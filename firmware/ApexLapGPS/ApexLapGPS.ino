@@ -49,6 +49,8 @@ uint8_t peerAddr[6];
 uint32_t connAtMs = 0;
 bool paramsAsked = false;
 volatile uint16_t connIntUnits = 0; // intervallo di connessione attuale (unità da 1,25 ms)
+volatile uint16_t peerMtu = 23;     // dimensione dei pacchetti concordata col telefono
+uint32_t sentPk = 0, sendErr = 0;   // statistiche per il monitor seriale
 
 uint8_t mode = MODE_25HZ_GPS;
 uint8_t cfgResult = 0;              // 0 sconosciuto, 1 ACK, 2 NAK
@@ -67,6 +69,7 @@ class ServerCb : public BLEServerCallbacks {
     memcpy(peerAddr, param->connect.remote_bda, 6);
     connAtMs = millis();
     connIntUnits = param->connect.conn_params.interval;
+    peerMtu = 23;
     paramsAsked = false;
     // intervallo di connessione corto (7,5-20 ms) per reggere 25 punti al secondo
     s->updateConnParams(param->connect.remote_bda, 6, 16, 0, 400);
@@ -95,6 +98,11 @@ class CtrlCb : public BLECharacteristicCallbacks {
 // Il telefono comunica l'intervallo di connessione che ha accettato: lo mando all'app per la diagnostica.
 void gapEvent(esp_gap_ble_cb_event_t ev, esp_ble_gap_cb_param_t* p) {
   if (ev == ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT) connIntUnits = p->update_conn_params.conn_int;
+}
+
+// La dimensione dei pacchetti la leggo direttamente dall'evento del Bluetooth.
+void gattsEvent(esp_gatts_cb_event_t ev, esp_gatt_if_t gattsIf, esp_ble_gatts_cb_param_t* p) {
+  if (ev == ESP_GATTS_MTU_EVT) peerMtu = p->mtu.mtu;
 }
 
 // Dopo il collegamento richiedo un intervallo di 15 ms: molti Android rifiutano la richiesta fatta subito.
@@ -129,11 +137,23 @@ bool packPair(const Pvt& a, const Pvt& b, uint8_t* out) {
   return true;
 }
 
+// Manda un pacchetto di posizioni. Con Bluedroid lo passo direttamente allo stack Bluetooth:
+// la notify() della libreria aspetta la conferma di ogni pacchetto e ne fa passare pochi al secondo.
+void sendPkt(uint8_t* data, uint16_t len) {
+#if defined(CONFIG_BLUEDROID_ENABLED)
+  esp_err_t e = esp_ble_gatts_send_indicate(server->getGattsIf(), connId, chPos->getHandle(), len, data, false);
+  if (e == ESP_OK) sentPk++; else sendErr++;
+#else
+  chPos->setValue(data, len);
+  chPos->notify();
+  sentPk++;
+#endif
+}
+
 void sendSingle(const Pvt& p) {
   uint8_t pkt[20];
   packPos(p, pkt);
-  chPos->setValue(pkt, 20);
-  chPos->notify();
+  sendPkt(pkt, 20);
 }
 
 void setupBle() {
@@ -141,6 +161,7 @@ void setupBle() {
   BLEDevice::setMTU(185);            // pacchetti più grandi: più posizioni per volta
 #if defined(CONFIG_BLUEDROID_ENABLED)
   BLEDevice::setCustomGapHandler(gapEvent);
+  BLEDevice::setCustomGattsHandler(gattsEvent);
 #endif
   server = BLEDevice::createServer();
   server->setCallbacks(new ServerCb());
@@ -238,10 +259,7 @@ void configureGps() {
 // Quante posizioni stanno in un pacchetto: dipende dall'MTU concordato col telefono.
 // A 25 Hz ne metto fino a 4 (un pacchetto ogni 160 ms), a 10 Hz fino a 2 (ogni 200 ms).
 int pointsPerPacket() {
-  uint16_t mtu = 23;
-#if defined(CONFIG_BLUEDROID_ENABLED)
-  mtu = server->getPeerMTU(connId);
-#endif
+  uint16_t mtu = peerMtu;
   int fit = (mtu > 23 ? mtu - 3 : 20) / 20;
   int want = (mode == MODE_25HZ_GPS) ? 4 : 2;
   if (fit < 1) fit = 1;
@@ -267,8 +285,7 @@ void handleUbx() {
       packPos(pvt, batch + nBatch * 20);
       nBatch++;
       if (nBatch >= ppp) {
-        chPos->setValue(batch, nBatch * 20);
-        chPos->notify();
+        sendPkt(batch, nBatch * 20);
         nBatch = 0;
       }
     } else {
@@ -277,8 +294,7 @@ void handleUbx() {
       else {
         uint8_t pkt[19];
         if (packPair(prevPvt, pvt, pkt)) {
-          chPos->setValue(pkt, 19);
-          chPos->notify();
+          sendPkt(pkt, 19);
           havePrev = false;
         } else {
           sendSingle(prevPvt);
@@ -334,8 +350,11 @@ void loop() {
     info[6] = ci > 255 ? 255 : ci;
     chInfo->setValue(info, sizeof(info));
     if (connected) chInfo->notify();
-    Serial.printf("[stato] %u Hz, satelliti %u, fix %d, telefono %s, intervallo %u ms\n", hzMeasured, lastSats, lastFix,
-                  connected ? "collegato" : "no", (unsigned)(connIntUnits * 5 / 4));
+    Serial.printf("[stato] %u Hz, satelliti %u, fix %d, telefono %s, pacchetto %u byte, intervallo %u ms, inviati %lu, errori %lu\n",
+                  hzMeasured, lastSats, lastFix, connected ? "collegato" : "no", (unsigned)peerMtu,
+                  (unsigned)(connIntUnits * 5 / 4), (unsigned long)sentPk, (unsigned long)sendErr);
+    sentPk = 0;
+    sendErr = 0;
   }
 
   // LED (acceso = livello basso)
