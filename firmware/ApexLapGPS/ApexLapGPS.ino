@@ -51,6 +51,7 @@ bool paramsAsked = false;
 volatile uint16_t connIntUnits = 0; // intervallo di connessione attuale (unità da 1,25 ms)
 volatile uint16_t peerMtu = 23;     // dimensione dei pacchetti concordata col telefono
 uint32_t sentPk = 0, sendErr = 0;   // statistiche per il monitor seriale
+uint16_t connLatency = 0;
 
 uint8_t mode = MODE_25HZ_GPS;
 uint8_t cfgResult = 0;              // 0 sconosciuto, 1 ACK, 2 NAK
@@ -346,6 +347,13 @@ void loop() {
   }
 
   if (now - lastInfoMs >= 1000) {
+#if defined(CONFIG_BLUEDROID_ENABLED)
+    // intervallo di connessione reale, letto dallo stack Bluetooth
+    if (connected) {
+      esp_gap_conn_params_t cp;
+      if (esp_ble_get_current_conn_params(peerAddr, &cp) == ESP_OK) { connIntUnits = cp.interval; connLatency = cp.latency; }
+    }
+#endif
     hzMeasured = pvtCount > 255 ? 255 : pvtCount;
     pvtCount = 0;
     lastInfoMs = now;
@@ -356,9 +364,9 @@ void loop() {
     info[6] = ci > 255 ? 255 : ci;
     chInfo->setValue(info, sizeof(info));
     if (connected) chInfo->notify();
-    Serial.printf("[stato] %u Hz, satelliti %u, fix %d, telefono %s, pacchetto %u byte, intervallo %u ms, inviati %lu, errori %lu\n",
+    Serial.printf("[stato] %u Hz, satelliti %u, fix %d, telefono %s, pacchetto %u byte, intervallo %u ms, latenza %u, inviati %lu, errori %lu\n",
                   hzMeasured, lastSats, lastFix, connected ? "collegato" : "no", (unsigned)peerMtu,
-                  (unsigned)(connIntUnits * 5 / 4), (unsigned long)sentPk, (unsigned long)sendErr);
+                  (unsigned)(connIntUnits * 5 / 4), (unsigned)connLatency, (unsigned long)sentPk, (unsigned long)sendErr);
     sentPk = 0;
     sendErr = 0;
   }
