@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+// numero di versione = numero della build su GitHub, così ogni APK nuovo si installa sopra il precedente
+def buildNum = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+
+android {
+    namespace 'it.apexlap.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'it.apexlap.app'
+        minSdk 26
+        targetSdk 34
+        versionCode buildNum
+        versionName "1.0.${buildNum}"
+    }
+
+    // chiave fissa: gli aggiornamenti si installano sopra senza perdere i dati
+    signingConfigs {
+        apex {
+            storeFile file('../apexlap.jks')
+            storePassword 'apexlap123'
+            keyAlias 'apexlap'
+            keyPassword 'apexlap123'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.apex
+            minifyEnabled false
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

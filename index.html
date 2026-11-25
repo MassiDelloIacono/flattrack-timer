@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v69';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v70';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -238,8 +238,23 @@ async function bleAttach(){const srv=await ble.dev.gatt.connect(),s=await srv.ge
   await ble.pos.startNotifications();ble.on=true;ble.t0=now();ble.n=0;stopPhoneGps();
   try{await ble.ctrl.writeValue(new Uint8Array([saved.extMode==null?1:saved.extMode]))}catch(e){}
   toast('GPS esterno collegato')}
+// ---- app Android (APK): il Bluetooth lo gestisce il codice nativo, che passa i pacchetti qui in esadecimale
+const NATIVE=typeof ApexNative!=='undefined';
+function hexDV(h){const b=new Uint8Array(h.length>>1);for(let i=0;i<b.length;i++)b[i]=parseInt(h.substr(i*2,2),16);return new DataView(b.buffer)}
+window.apexBle={
+  pos(h){if(ble.on)onBlePos({target:{value:hexDV(h)}})},
+  info(h){onBleInfo({target:{value:hexDV(h)}})},
+  state(st){
+    if(st==='on'){ble.on=true;ble.t0=now();ble.n=0;ble.pk=0;if(saved.source==='ble')stopPhoneGps();
+      try{ApexNative.setMode(saved.extMode==null?1:saved.extMode)}catch(e){}toast('GPS esterno collegato')}
+    else if(st==='lost'){const was=ble.on;ble.on=false;ble.hz=0;if(saved.source==='ble'){if(was)toast('GPS esterno perso: uso quello del telefono');startPhoneGps()}}
+    else if(st==='scan')toast('Cerco il GPS esterno…');
+    else if(st==='notfound')toast('GPS esterno non trovato: è acceso?');
+    else if(st==='btoff')toast('Accendi il Bluetooth');
+    else if(st==='noperm')toast('Serve il permesso per il Bluetooth')}};
 // va chiamata da un tocco (il browser apre l'elenco dei dispositivi Bluetooth)
 async function bleConnect(){
+  if(NATIVE){try{ApexNative.connect()}catch(e){}return}
   if(!navigator.bluetooth){toast('Bluetooth non disponibile: usa Chrome su Android');return}
   if(ble.busy||ble.on)return;ble.busy=true;
   try{if(!ble.dev){ble.dev=await navigator.bluetooth.requestDevice({filters:[{services:[BLE_SVC]}]});ble.dev.addEventListener('gattserverdisconnected',bleLost)}
@@ -250,11 +265,11 @@ function bleLost(){const was=ble.on;ble.on=false;ble.hz=0;
   if(saved.source==='ble'){if(was)toast('GPS esterno perso: uso quello del telefono');startPhoneGps();setTimeout(bleRetry,2000)}}
 async function bleRetry(){if(saved.source!=='ble'||ble.on||ble.busy||!ble.dev)return;ble.busy=true;
   try{await bleAttach()}catch(e){setTimeout(bleRetry,3000)}finally{ble.busy=false}}
-function bleClose(){ble.on=false;try{if(ble.dev&&ble.dev.gatt.connected)ble.dev.gatt.disconnect()}catch(e){}}
+function bleClose(){if(NATIVE){try{ApexNative.disconnect()}catch(e){}}ble.on=false;try{if(ble.dev&&ble.dev.gatt.connected)ble.dev.gatt.disconnect()}catch(e){}}
 // all'avvio: se il browser ricorda il GPS già autorizzato, mi ricollego senza chiedere nulla
-function bleAuto(){try{if(navigator.bluetooth&&navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(ds=>{
+function bleAuto(){if(NATIVE){try{ApexNative.connect()}catch(e){}return}try{if(navigator.bluetooth&&navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(ds=>{
   const d=ds.find(x=>/ApexLap|FlatTrack/i.test(x.name||''));if(d){ble.dev=d;d.addEventListener('gattserverdisconnected',bleLost);bleRetry()}}).catch(()=>{})}catch(e){}}
-async function setExtMode(m){saved.extMode=m;persist();if(ble.on&&ble.ctrl){try{await ble.ctrl.writeValue(new Uint8Array([m]))}catch(e){}}}
+async function setExtMode(m){saved.extMode=m;persist();if(NATIVE){try{ApexNative.setMode(m)}catch(e){}return}if(ble.on&&ble.ctrl){try{await ble.ctrl.writeValue(new Uint8Array([m]))}catch(e){}}}
 
 // ===================== demo: moto virtuale su ovale =====================
 const STR=100,RAD=31.83,PER=2*STR+2*Math.PI*RAD,BASE={lat:44.5,lon:11.3};
