@@ -69,6 +69,8 @@ public class MainActivity extends Activity {
     boolean ready = false;      // notifiche attive
     int failures = 0;
     int pendingMode = -1;
+    int mtu = 23;               // dimensione dei pacchetti concordata col GPS
+    String mtuNote = "";
     final ArrayDeque<BluetoothGattDescriptor> cccdQueue = new ArrayDeque<>();
     GeolocationPermissions.Callback geoCallback;
     String geoOrigin;
@@ -213,6 +215,11 @@ public class MainActivity extends Activity {
         public String version() {
             return "android";
         }
+
+        @JavascriptInterface
+        public String diag() {
+            return "pacchetto " + mtu + " byte (" + mtuNote + ")";
+        }
     }
 
     void js(String code) {
@@ -303,9 +310,20 @@ public class MainActivity extends Activity {
         public void onConnectionStateChange(BluetoothGatt g, int status, int newState) {
             main.post(() -> {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    // connessione veloce (11-15 ms) e pacchetti grandi: è quello che Chrome non permette
-                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
-                    if (!g.requestMtu(185)) g.discoverServices();
+                    // pacchetti grandi e connessione veloce (è quello che Chrome non permette),
+                    // una richiesta alla volta: Android ignora le richieste sovrapposte
+                    mtu = 23;
+                    mtuNote = "chiesto";
+                    main.postDelayed(() -> {
+                        if (g != gatt) return;
+                        if (!g.requestMtu(185)) {
+                            mtuNote = "ritento";
+                            main.postDelayed(() -> {
+                                if (g != gatt) return;
+                                if (!g.requestMtu(185)) { mtuNote = "rifiutato"; afterMtu(g); }
+                            }, 800);
+                        }
+                    }, 400);
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     boolean wasReady = ready;
                     ready = false;
@@ -319,8 +337,12 @@ public class MainActivity extends Activity {
         }
 
         @Override
-        public void onMtuChanged(BluetoothGatt g, int mtu, int status) {
-            main.post(g::discoverServices);
+        public void onMtuChanged(BluetoothGatt g, int m, int status) {
+            main.post(() -> {
+                mtu = m;
+                mtuNote = status == BluetoothGatt.GATT_SUCCESS ? "ok" : "errore " + status;
+                afterMtu(g);
+            });
         }
 
         @Override
@@ -355,6 +377,11 @@ public class MainActivity extends Activity {
             else if (INFO.equals(c.getUuid())) js("window.apexBle&&apexBle.info('" + hex(v) + "')");
         }
     };
+
+    void afterMtu(BluetoothGatt g) {
+        g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+        main.postDelayed(() -> { if (g == gatt) g.discoverServices(); }, 400);
+    }
 
     void writeNextCccd(BluetoothGatt g) {
         BluetoothGattDescriptor d = cccdQueue.poll();

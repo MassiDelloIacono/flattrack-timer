@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v71';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v72';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -825,7 +825,8 @@ function drawSettings(){header('Opzioni',()=>dev.screen='ready','');scrollZone=n
       segmented('sext',x0,cy,w0,ch,[['10 Hz',0],['25 Hz',1]],saved.extMode==null?1:saved.extMode,v=>setExtMode(v))}
     if(ext&&!ble.on)button('sble',x0,y,w0,ch,'Collega GPS esterno',{primary:true,size:20,r:14,act:()=>bleConnect()});
     else info('Segnale',!dev.fix?'Nessun segnale':`Precisione ±${Math.round(dev.hAcc)} m`+(ext&&ble.on&&ble.hz?`, ${ble.hz} Hz`:''),dev.fix?(dev.hAcc<6?C.gainTxt:C.fg):C.lossTxt);
-    if(ext&&ble.on)info('Bluetooth',`GPS ${ble.devHz} Hz, arrivano ${ble.hz} punti/s (${ble.pps} pacchetti da ${ble.ppp}${ble.ci?`, ogni ${ble.ci} ms`:''}), fw ${ble.fw}, ${NATIVE?'app Android':'Chrome'}`,C.dim)}
+    if(ext&&ble.on){info('Bluetooth',`GPS ${ble.devHz} Hz, arrivano ${ble.hz} punti/s`,C.dim);
+      info('Pacchetti',`${ble.pps}/s da ${ble.ppp} punti, fw ${ble.fw}, `+(NATIVE?(()=>{try{return ApexNative.diag()}catch(e){return 'APK vecchio'}})():'Chrome'),C.dim)}}
   else if(tab==='gara'){
     let cy=item('Numero grande','anche con un tocco');
     segmented('sview',x0,cy,w0,ch,[['Delta',0],['Tempo del giro',1]],saved.view,v=>{saved.view=v;persist()});
