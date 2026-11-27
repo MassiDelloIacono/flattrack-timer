@@ -64,7 +64,7 @@ class LapTimer{
   update(f){if(!f.valid||!this.line){this.havePrev=false;return false}let done=false;
     if(this.havePrev&&f.t>this.pt){const seg=Math.hypot(f.x-this.px,f.y-this.py),t=this.crosses(this.px,this.py,f.x,f.y),tc=this.pt+Math.round(Math.max(t,0)*(f.t-this.pt));
       if(t>=0&&(!this.inLap||tc-this.start>=this.minLapMs)){
-        if(this.inLap){const ms=tc-this.start;this.tr.push([this.curDist+seg*t,ms]);this.laps.push(ms);this.lastMs=ms;this.lastWasBest=!this.bestMs||ms<this.bestMs;
+        if(this.inLap){const ms=tc-this.start;this.tr.push([this.curDist+seg*t,ms]);this.laps.push(ms);this.lastTr=this.tr;this.lastMs=ms;this.lastWasBest=!this.bestMs||ms<this.bestMs;
           if(this.lastWasBest){this.prevBest=this.bestMs;this.bestMs=ms;this.bestNo=this.laps.length;this.best=this.tr.slice()}done=true}
         if(!this.inLap&&this.firstStart==null)this.firstStart=tc;this.inLap=true;this.start=tc;this.curDist=seg*(1-t);this.tr=[[0,0],[this.curDist,f.t-tc]];
       }else if(this.inLap){this.curDist+=seg;this.tr.push([this.curDist,f.t-this.start])}}
@@ -76,7 +76,7 @@ class LapTimer{
 }
 
 // ===================== memoria =====================
-const VERSION='v73';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
+const VERSION='v74';const LS='ftt-app-v1';let saved={tracks:[],view:0,minLap:8,source:'phone',session:null,showSpeed:false,theme:'auto',dmode:'sec'};
 try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j)saved={...saved,...j}}catch(e){}
 const persist=()=>{try{localStorage.setItem(LS,JSON.stringify(saved))}catch(e){}};
 saved.tracks.forEach((t,i)=>{if(!t.name)t.name='Pista '+(i+1)});
@@ -192,6 +192,7 @@ function onFix(f){
     if(tk&&(!tk.record||lt.lastMs<tk.record)){dev.trackRec=!!tk.record;dev.oldTrackRec=tk.record||0;tk.record=lt.lastMs;
       const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr)tk.trace=tr;applyMinLap();persist()}
     else if(tk&&!tk.trace){const tr=buildTrace(dev.donePts,tk,lt.lastMs);if(tr){tk.trace=tr;persist()}}
+    if(tk){recordSectors(tk,tk.record===lt.lastMs);persist()}
     const rec=(lt.lastWasBest&&lt.prevBest>0)||dev.trackRec;if(rec)dev.flashUntil=now()+4500;else dev.lapHl=now()+3000;saveSession()}
 }
 
@@ -751,6 +752,18 @@ function drawTraceMini(tk,x,y,w,h,mono){const tr=tk.trace,g=traceGeom(tr),sc=Mat
     cx.strokeStyle=mono||spdCol((g.P[i][2]-g.v0)/vr);cx.lineWidth=5;cx.stroke()}
   const kx=R*D2R*Math.cos(tr.o[0]*D2R),ky=R*D2R;cx.beginPath();cx.arc(ox+(tk.lon-tr.o[1])*kx*sc,oy-(tk.lat-tr.o[0])*ky*sc,7,0,7);cx.fillStyle=mono?C.bg:C.accent;cx.fill()}
 function setSecs(tk,n,f){tk.sec={n,f:f||eqSplits(n)};persist()}
+// ---------- tempi dei settori ----------
+// a ogni giro calcolo il tempo di ogni settore (stessi confini in proporzione alla lunghezza del giro)
+// e tengo per pista il migliore di ciascun settore (tk.bs) e quelli del giro record (tk.rs).
+// Se cambi numero o posizione dei settori i tempi ripartono da zero (k = firma della divisione).
+function secSig(tk){return secCount(tk)+':'+secFracs(tk).map(f=>f.toFixed(3)).join(',')}
+function lapSecTimes(tr,F){if(!tr||tr.length<3)return null;const tot=tr[tr.length-1][0];if(!(tot>0))return null;
+  const at=d=>{let i=1;while(i<tr.length&&tr[i][0]<d)i++;if(i>=tr.length)return tr[tr.length-1][1];
+    const a=tr[i-1],b=tr[i],f=b[0]>a[0]?(d-a[0])/(b[0]-a[0]):0;return a[1]+f*(b[1]-a[1])};
+  const B=[0,...F.map(f=>at(f*tot)),tr[tr.length-1][1]];return B.slice(1).map((v,i)=>Math.round(v-B[i]))}
+function recordSectors(tk,isRecord){const t=lapSecTimes(lt.lastTr,secFracs(tk));if(!t)return;const sig=secSig(tk);
+  if(!tk.bs||tk.bs.k!==sig)tk.bs={k:sig,t:t.slice()};else tk.bs.t=tk.bs.t.map((v,i)=>Math.min(v,t[i]));
+  if(isRecord)tk.rs={k:sig,t:t.slice()}}
 function moveSecBoundary(tk,P,X,Y){const p=lastPt;let bj=-1,bd=50;P.forEach((q,j)=>{const d=Math.hypot(X(q[0])-p.x,Y(q[1])-p.y);if(d<bd){bd=d;bj=j}});
   if(bj<0){toast('Tocca sopra la pista');return}const cum=traceCum(tk.trace),L=cum[cum.length-1]||1,fj=cum[bj]/L;
   if(fj<0.03||fj>0.97){toast('Troppo vicino al traguardo');return}
@@ -765,13 +778,18 @@ function drawSecControls(tk,x,y,w){const n=secCount(tk),F=secFracs(tk),eq=eqSpli
   if(manual)button('secEq',x,y+72,w,40,'Rimetti uguali',{ghost:true,size:16,r:12,weight:600,act:()=>setSecs(tk,n)});
   else fitT('Trascina i pallini sulla pista',x,y+84,15,C.faint,w,'left',500)}
 function drawTrackMap(){const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
-  header(tk?tk.name:'Pista',()=>dev.screen='tracks','');
-  if(tr)txt('registrata il '+new Date(tr.d).toLocaleDateString('it-IT',{day:'numeric',month:'short'}),W-16,30,14,C.dim,'right',500,'m');
+  const geo=tr?traceGeom(tr):null;
+  header(tk?tk.name:'Pista',()=>dev.screen='tracks',geo?Math.round(geo.len)+' m':'');
+  if(tk){const n=secCount(tk),bx=W-16-48;  // settori: − n + in alto a destra
+    button('secUp',bx,10,48,40,'+',{act:()=>setSecs(tk,n+1),disabled:n>=SEC_MAX,r:12,size:24});
+    num(String(n),bx-22,31,26,C.fg,'center',700);
+    button('secDn',bx-44-48,10,48,40,'−',{act:()=>setSecs(tk,n-1),disabled:n<=SEC_MIN,r:12,size:24});
+    txt('settori',bx-44-48-10,30,14,C.dim,'right',500,'m')}
   const top=58;
   if(!tr){icon('map',W/2,150,40,C.faint);txt('Nessun tracciato per questa pista',W/2,206,26,C.fg,'center',700);
     fitT('Si salva da solo quando fai un giro completo, e si aggiorna a ogni nuovo record',W/2,242,18,C.dim,W-40,'center',500);return}
-  const{P,x0,x1,y0,y1,v0,v1,len}=traceGeom(tr);
-  const side=220,mx=16,my=top,mw=W-side-16-16-16,mh=H-top-14-30,sc=Math.min((mw-40)/Math.max(1,x1-x0),(mh-40)/Math.max(1,y1-y0)),
+  const{P,x0,x1,y0,y1,v0,v1}=geo;
+  const side=290,mx=16,my=top,mw=W-side-16-16-16,mh=H-top-14-30,sc=Math.min((mw-40)/Math.max(1,x1-x0),(mh-40)/Math.max(1,y1-y0)),
     ox=mx+mw/2-(x0+x1)/2*sc,oy=my+mh/2+(y0+y1)/2*sc,X=x=>ox+x*sc,Y=y=>oy-y*sc,vr=Math.max(1,v1-v0);
   cx.lineCap='round';cx.lineJoin='round';cx.beginPath();P.forEach((q,i)=>i?cx.lineTo(X(q[0]),Y(q[1])):cx.moveTo(X(q[0]),Y(q[1])));
   cx.strokeStyle=C.off;cx.lineWidth=14;cx.stroke();
@@ -784,12 +802,30 @@ function drawTrackMap(){const tk=saved.tracks[dev.tsel],tr=tk&&tk.trace;
     num(String(k+1),X(pt[0]),Y(pt[1])+0.5,15,C.bg,'center',700)});
   dev.mapGeo={tk,P,X,Y,cum:traceCum(tk.trace),pts:sp.map(q=>{const pt=P[Math.min(P.length-1,q.i)];return pt?[X(pt[0]),Y(pt[1])]:null})};
   hits.push({id:'secMove',x:mx,y:my,w:mw,h:mh,act:()=>moveSecBoundary(tk,P,X,Y)});
-  const ly=H-22,lx0=mx+44,lw=mw-140;for(let i=0;i<lw;i+=2){cx.fillStyle=spdCol(i/lw);cx.fillRect(lx0+i,ly-4,2,8)}
-  num(Math.round(v0)+'',lx0-10,ly,16,C.dim,'right',700);num(Math.round(v1)+' km/h',lx0+lw+10,ly,16,C.dim,'left',700);
-  const rx=W-16-side;
-  txt('lunghezza',rx,top+8,14,C.dim,'left',500,'m');num(Math.round(len)+' m',rx,top+38,28,C.fg,'left',700,side);
-  txt('tempo del giro',rx,top+72,14,C.dim,'left',500,'m');num(fmt(tr.ms),rx,top+102,28,C.gainTxt,'left',700,side);
-  drawSecControls(tk,rx,top+136,side)}
+  {const n=secCount(tk),F=secFracs(tk),eq=eqSplits(n),manual=F.some((f,i)=>Math.abs(f-eq[i])>1e-6);
+    if(manual){fitT('Trascina i pallini per spostare i settori',mx+mw/2-70,H-24,15,C.faint,mw-170,'center',500);
+      button('secEq',mx+mw-130,H-44,130,36,'Rimetti uguali',{ghost:true,size:15,r:12,weight:600,act:()=>setSecs(tk,n)})}
+    else fitT('Trascina i pallini per spostare i settori',mx+mw/2,H-24,15,C.faint,mw,'center',500)}
+  // a destra: migliori settori e giro ideale
+  const rx=W-16-side,sig=secSig(tk),n=secCount(tk),bs=tk.bs&&tk.bs.k===sig?tk.bs.t:null,rs=tk.rs&&tk.rs.k===sig?tk.rs.t:null;
+  const ih=86,iy=H-14-ih,ch=iy-10-top;
+  rr(rx,top,side,ch,20,C.surface);txt('migliori settori',rx+16,top+18,13,C.dim,'left',500,'m');
+  if(!bs){fitT('Fai un giro completo:',rx+side/2,top+ch/2-12,17,C.dim,side-32,'center',500);
+    fitT('qui compaiono i tempi dei settori',rx+side/2,top+ch/2+12,17,C.dim,side-32,'center',500)}
+  else{const rh=Math.min(44,(ch-36)/n),fs=Math.max(15,Math.min(26,rh*0.62)),cr=Math.max(9,Math.min(14,rh/2-3));
+    for(let k=0;k<n;k++){const y=top+32+k*rh+rh/2,v=bs[k],r=rs&&rs[k],better=r!=null&&v<r;
+      cx.beginPath();cx.arc(rx+30,y,cr,0,7);cx.fillStyle=C.fg;cx.fill();num(String(k+1),rx+30,y+0.5,Math.round(cr*1.05),C.bg,'center',700);
+      num(fmt(v),rx+52,y,fs,better?C.gainTxt:C.fg,'left',700);
+      if(r!=null)txt(better?'nel record '+fmt(r):'nel record',rx+side-16,y,13,C.faint,'right',500,'m');
+      if(k<n-1){cx.fillStyle=C.btn;cx.fillRect(rx+16,top+32+(k+1)*rh,side-32,1)}}}
+  rr(rx,iy,side,ih,20,C.surface);
+  // il giro ideale non può superare il record (differenze di arrotondamento sui millesimi)
+  let ideal=bs&&bs.length===n?bs.reduce((a,b)=>a+b,0):0;if(ideal&&tk.record)ideal=Math.min(ideal,tk.record);
+  txt('giro ideale',rx+16,iy+22,13,C.dim,'left',500,'m');
+  num(ideal?fmt(ideal):'—',rx+16,iy+56,34,!ideal?C.faint:ideal<tk.record?C.gainTxt:C.fg,'left',700);
+  txt('record',rx+side-16,iy+22,13,C.dim,'right',500,'m');
+  num(tk.record?fmt(tk.record):'—',rx+side-16,iy+48,22,C.fg,'right',700);
+  if(ideal&&tk.record&&ideal<tk.record)txt('−'+((tk.record-ideal)/1000).toFixed(3),rx+side-16,iy+72,13,C.gainTxt,'right',500,'m')}
 // ---------- conferme ----------
 function drawConfirm(title,sub,yesLbl,act,back='ready'){
   fitT(title,W/2,150,40,C.fg,W-40,'center',700);fitT(sub,W/2,194,21,C.dim,Math.min(620,W-40),'center',500);
